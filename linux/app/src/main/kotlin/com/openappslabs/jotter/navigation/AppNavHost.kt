@@ -54,7 +54,8 @@ fun AppNavHost(
                     navController.navigate(AppRoutes.NoteDetail(category = category))
                 },
                 onAddCategoryClick = { navController.navigate(AppRoutes.AddCategory) },
-                onSettingsClick = { navController.navigate(AppRoutes.Settings) }
+                onSettingsClick = { navController.navigate(AppRoutes.Settings) },
+                onProfileClick = { navController.navigate(AppRoutes.About) }
             )
         }
 

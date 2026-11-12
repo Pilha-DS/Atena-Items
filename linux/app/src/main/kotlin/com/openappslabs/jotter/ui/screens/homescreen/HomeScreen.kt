@@ -78,6 +78,7 @@ fun HomeScreen(
     onAddNoteClick: (String?) -> Unit,
     onAddCategoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onProfileClick: () -> Unit,
     viewModel: HomeScreenViewModel = viewModel {
         HomeScreenViewModel(
             AppGraph.notesRepository,
@@ -149,7 +150,10 @@ fun HomeScreen(
             SearchBar(
                 query = uiState.searchQuery,
                 onQueryChange = viewModel::onSearchQueryChange,
-                onProfileClick = {  },
+                onProfileClick = {
+                    haptics.click()
+                    onProfileClick()
+                },
                 onSettingsClick = {
                     haptics.click()
                     onSettingsClick()

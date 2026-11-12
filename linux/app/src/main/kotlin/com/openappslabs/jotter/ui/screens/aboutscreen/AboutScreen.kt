@@ -68,6 +68,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openappslabs.jotter.ui.theme.rememberJotterHaptics
+import com.openappslabs.jotter.platform.Diagnostics
+import com.openappslabs.jotter.platform.ExternalLinks
+import com.openappslabs.jotter.platform.Toaster
 import java.time.Year
 import com.openappslabs.jotter.ui.components.AboutMeCard
 import com.openappslabs.jotter.ui.i18n.LocalStrings
@@ -120,10 +123,21 @@ private fun AboutContent(
     val uriHandler = LocalUriHandler.current
     val strings = LocalStrings.current
     val year = remember { Year.now().toString() }
-    val openGithub = remember { { uriHandler.openUri("https://github.com/OpenAppsLabs") } }
-    val openSource = remember { { uriHandler.openUri("https://github.com/OpenAppsLabs/Jotter") } }
-    val openEmail = remember { { uriHandler.openUri("mailto:openappslabs@gmail.com") } }
-    val openLicense = remember { { uriHandler.openUri("https://www.gnu.org/licenses/gpl-3.0.en.html") } }
+    // Every link goes through here: it suspends the widget's auto-close (the
+    // browser takes the focus away) and reports a failure instead of letting
+    // the exception kill the click.
+    val openLink: (String) -> Unit = { url ->
+        ExternalLinks.markOpened()
+        runCatching { uriHandler.openUri(url) }
+            .onFailure {
+                Diagnostics.log("open link failed ($url): ${it.stackTraceToString()}")
+                Toaster.show(strings.couldNotOpenLink)
+            }
+    }
+    val openGithub = remember(openLink) { { openLink("https://github.com/OpenAppsLabs") } }
+    val openSource = remember(openLink) { { openLink("https://github.com/OpenAppsLabs/Jotter") } }
+    val openEmail = remember(openLink) { { openLink("mailto:openappslabs@gmail.com") } }
+    val openLicense = remember(openLink) { { openLink("https://www.gnu.org/licenses/gpl-3.0.en.html") } }
     val copyrightText = remember { "Open Apps Labs © $year" }
     val appVersion = remember { "2.0.0" }
 

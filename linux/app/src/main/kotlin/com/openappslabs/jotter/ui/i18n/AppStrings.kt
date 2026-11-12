@@ -235,6 +235,7 @@ interface AppStrings {
     val privacyPolicySubtitle: String
     val about: String
     val aboutSubtitle: String
+    val couldNotOpenLink: String
 
     // ------------------------------------------------------------- language
     val appLanguage: String
@@ -561,6 +562,7 @@ object EnglishStrings : BaseStrings() {
     override val privacyPolicySubtitle = "How I handle your data"
     override val about = "About"
     override val aboutSubtitle = "Info & support"
+    override val couldNotOpenLink = "Could not open the link"
 
     override val appLanguage = "App language"
     override val appLanguageSubtitle = "Language used across the app"
@@ -886,6 +888,7 @@ object PortugueseStrings : BaseStrings() {
     override val privacyPolicySubtitle = "Como trato seus dados"
     override val about = "Sobre"
     override val aboutSubtitle = "Informações e suporte"
+    override val couldNotOpenLink = "Não foi possível abrir o link"
 
     override val appLanguage = "Idioma do app"
     override val appLanguageSubtitle = "Idioma usado em todo o app"

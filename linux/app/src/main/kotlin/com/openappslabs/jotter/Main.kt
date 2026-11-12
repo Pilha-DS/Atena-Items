@@ -72,6 +72,7 @@ import com.openappslabs.jotter.platform.AppLock
 import com.openappslabs.jotter.platform.AutoSave
 import com.openappslabs.jotter.platform.BackDispatcher
 import com.openappslabs.jotter.platform.Diagnostics
+import com.openappslabs.jotter.platform.ExternalLinks
 import com.openappslabs.jotter.platform.IpcBridge
 import com.openappslabs.jotter.platform.LocalBackDispatcher
 import com.openappslabs.jotter.platform.PinStore
@@ -192,13 +193,24 @@ fun main() {
 
         LaunchedEffect(Unit) {
             var unfocusedSince = 0L
+            // Links open the browser, which takes the focus away. That is not
+            // "the user clicked outside", so the automatic close is suspended
+            // until this window is focused again.
+            var lastExternalOpen = ExternalLinks.lastOpenedAt
             while (true) {
                 delay(100)
                 if (!isVisible || !autoHideOnBlur) {
                     unfocusedSince = 0L
+                    lastExternalOpen = ExternalLinks.lastOpenedAt
                     continue
                 }
                 val now = System.currentTimeMillis()
+                if (ExternalLinks.lastOpenedAt != lastExternalOpen) {
+                    lastExternalOpen = ExternalLinks.lastOpenedAt
+                    focusArmed = false
+                    unfocusedSince = 0L
+                    continue
+                }
                 // Our own popups/dialogs keep the widget alive while they are
                 // focused (dropdowns, PIN dialog, action sheets).
                 val ownFocused = java.awt.Window.getWindows().any { it.isShowing && it.isFocused }
