@@ -1,0 +1,32 @@
+# ---- Gradle / Kotlin ----
+.gradle/
+build/
+.kotlin/
+captures/
+*.hprof
+
+# ---- Configuração local ----
+local.properties
+.env
+*.jks
+*.keystore
+
+# ---- Android ----
+*.apk
+*.aab
+*.iml
+release/
+
+# ---- IDE / sistema ----
+.idea/
+.DS_Store
+*.swp
+*~
+
+# ---- Dados temporários e artefatos ----
+.tmp/
+*.log
+*.db
+*.db-shm
+*.db-wal
+jotter-server.zip

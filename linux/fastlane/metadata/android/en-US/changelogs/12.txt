@@ -1,0 +1,7 @@
+Jotter Version 2.4.0
+
+What's New
+- Added redesigned note action menu with support for sharing, exporting, duplicating, clipboard copy, pinning, locking, archiving, and deletion.
+- Introduced note info card displaying creation/modification timestamps and word/character counts.
+- Implemented one‑tap export to plain text files and clipboard copy for quick sharing.
+- Added note duplication to create instant copies of existing notes.

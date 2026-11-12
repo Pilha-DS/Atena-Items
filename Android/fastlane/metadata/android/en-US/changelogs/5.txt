@@ -1,0 +1,5 @@
+Version 1.2.2
+
+- Removed updater and code related to that to comply with inclusion policy
+- Added dependenciesInfo block.
+- Reverted privacy policy content related to updater.

@@ -1,0 +1,14 @@
+Jotter Version 2.2.0
+
+### UI/UX Updates
+- Redesigned dialogs for a better feel.
+- New About Me card & refreshed Settings screen.
+- Sorting now uses a bottom sheet with improved UI.
+- Added rounded corners to homescreen notes.
+- Improved spacing in note detail view.
+
+### Bug Fixes
+- Standardized date formatting app-wide.
+- Fixed sorting for pinned notes.
+- Improved touch area: tap anywhere in a note to type.
+- Fixed bug showing empty categories.

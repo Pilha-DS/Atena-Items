@@ -1,0 +1,18 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Open Apps Labs"
+            }
+        ],
+        "Description": "Mantém a janela do Jotter fora da barra de tarefas e do paginador, como um widget",
+        "Icon": "jotter",
+        "Id": "jotter-widget",
+        "License": "GPL-3.0-or-later",
+        "Name": "Jotter Widget",
+        "Version": "1.0.0"
+    },
+    "KPackageStructure": "KWin/Script",
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

@@ -1,0 +1,18 @@
+Jotter 2.1.0
+
+🚀 New Features
+- ✏️ Revamped Settings UI — Redesigned for better usability
+- 🗂️ Sorting Options — Added sorting functionality
+- 🧭 Home Screen Toggle — Toggle to show/hide sorting options
+
+🎨 UI / UX Enhancements
+- 🆕 Settings Screen Overhaul — Cleaner and more intuitive layout
+- ⚙️ Home Screen UI Update — Smoother user experience
+
+⚡ Performance & Optimization
+- 🚀 Optimized Settings Navigation — Faster transitions
+
+🧠 Housekeeping
+- 🛠️ Removed Unused Libraries — Cleaned up old dependencies
+- 🔄 Updated Libraries — Improved performance & security
+- 🧹 Code Cleanup — General optimizations

@@ -1,0 +1,82 @@
+#!/usr/bin/env bash
+#
+# Helper used by the Plasma panel widget and by the .desktop launcher.
+#
+#   jotter-toggle                       show/hide the running widget, or start it
+#   jotter-toggle anchor X Y W H        same, but tells the app the screen
+#                                       rectangle of the panel icon so the card
+#                                       opens right below/next to it
+#   jotter-toggle status                print the note counter JSON
+#
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/jotter"
+APP_BIN="${JOTTER_BIN:-$HOME/.local/opt/jotter/bin/jotter}"
+
+# The app publishes the directory it actually uses; fall back to the same
+# rules the app applies when there is no running instance yet.
+ipc_dir() {
+    local published=""
+    if [[ -f "$CONFIG_DIR/ipc-dir" ]]; then
+        published="$(head -n 1 "$CONFIG_DIR/ipc-dir" 2>/dev/null || true)"
+    fi
+    if [[ -n "$published" && -d "$published" ]]; then
+        printf '%s\n' "$published"
+        return
+    fi
+    if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" && -w "$XDG_RUNTIME_DIR" ]]; then
+        printf '%s\n' "$XDG_RUNTIME_DIR/jotter"
+        return
+    fi
+    printf '%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}/jotter/run"
+}
+
+# Matches both the installed app image (process name `jotter`) and a
+# development run (`java ... com.openappslabs.jotter.MainKt`).
+is_running() {
+    pgrep -x jotter >/dev/null 2>&1 && return 0
+    pgrep -f "com\.openappslabs\.jotter\.MainKt" 2>/dev/null \
+        | grep -vqx -- "$$" >/dev/null 2>&1 && return 0
+    return 1
+}
+
+DIR="$(ipc_dir)"
+
+if [[ "${1:-}" == "status" ]]; then
+    if [[ -f "$DIR/jotter.status.json" ]]; then
+        cat "$DIR/jotter.status.json"
+    else
+        printf '{"count":0,"last":""}\n'
+    fi
+    exit 0
+fi
+
+mkdir -p "$DIR"
+
+# Optional leading "anchor X Y W H": remember where the panel icon is, so the
+# window can be placed just below it.
+if [[ "${1:-}" == "anchor" ]]; then
+    shift
+    if [[ $# -ge 4 ]] \
+        && [[ "$1" =~ ^-?[0-9]+$ ]] && [[ "$2" =~ ^-?[0-9]+$ ]] \
+        && [[ "$3" =~ ^[0-9]+$ ]] && [[ "$4" =~ ^[0-9]+$ ]]; then
+        printf '%s %s %s %s\n' "$1" "$2" "$3" "$4" > "$DIR/jotter.anchor"
+    fi
+fi
+
+if is_running; then
+    # The running instance watches this file and flips its visibility.
+    touch "$DIR/jotter.toggle"
+    exit 0
+fi
+
+if [[ ! -x "$APP_BIN" ]]; then
+    APP_BIN="$(command -v jotter || true)"
+fi
+
+if [[ -z "$APP_BIN" ]] || [[ ! -x "$APP_BIN" ]]; then
+    echo "jotter-toggle: Jotter is not installed (expected at \$HOME/.local/opt/jotter/bin/jotter)" >&2
+    exit 1
+fi
+
+setsid nohup "$APP_BIN" >/dev/null 2>&1 &

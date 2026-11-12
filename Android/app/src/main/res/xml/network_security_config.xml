@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The sync server is usually a small machine on the same network, reachable
+  over plain HTTP on the local IP (there is no certificate to install on a LAN
+  box). HTTPS is still used normally whenever the URL starts with https://.
+
+  If you expose the server to the internet, put it behind a reverse proxy with
+  TLS and prefer the https:// URL.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

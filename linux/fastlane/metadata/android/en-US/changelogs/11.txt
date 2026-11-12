@@ -1,0 +1,12 @@
+Jotter Version 2.3.0
+
+New:
+- New theme selector.
+
+Fixes:
+- Edit button size inconsistency in note details.
+- Locked notes showing up in search results.
+- Locked notes being readable in archive and trash.
+
+Warning:
+- Always backup your data before updating for safety.

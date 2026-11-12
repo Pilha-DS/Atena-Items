@@ -1,0 +1,19 @@
+## Introducing Jotter 2.0.0
+
+### ⚠️ Warning
+- **Important:** Please **backup your data before updating** to this version to avoid any potential data loss.
+
+### 🚀 New Features
+- ✏️ **Search Bar** added for quick searching — now you can find notes instantly without scrolling through long lists.
+- 🗂️ **Edit Categories** — edit category names directly in the UI without needing to delete and recreate them.
+- 🧭 **Improved Navigation** flow across screens — smoother transitions and easier movement between sections.
+- ⚡ **Instant Category Assignment** — new notes automatically inherit the currently selected category
+
+### 🎨 UI / UX Enhancements
+- 🆕 **Revamped Category Screen** — cleaner layout with options to edit or remove categories more intuitively.
+- ⚙️ **Revamped Settings Screen** — improved usability and design for easier access to settings.
+
+### ⚡ Performance & Optimization
+- 🚀 **Optimized App Performance** — faster loading and a smoother overall experience.
+- 🧠 **Optimized codebase** — general housekeeping and cleanup for improved stability.
+- 🛠️ **Switched to Kotlin Serialization** — better performance and efficiency compared to the previous method.

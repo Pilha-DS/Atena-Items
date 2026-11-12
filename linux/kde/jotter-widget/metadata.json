@@ -1,0 +1,19 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Open Apps Labs"
+            }
+        ],
+        "Category": "Utilities",
+        "Description": "Abre e recolhe o widget de notas Jotter, mostrando a contagem de notas",
+        "Icon": "jotter",
+        "Id": "org.jotter.widget",
+        "License": "GPL-3.0-or-later",
+        "Name": "Jotter",
+        "Version": "1.0.0",
+        "Website": "https://github.com/OpenAppsLabs/Jotter"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}
