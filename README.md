@@ -147,6 +147,16 @@ systemctl --user restart plasma-plasmashell
 
 Requisitos do widget: KDE Plasma 6 e KWin. O script gera um `.desktop`, um ícone e o helper `~/.local/bin/jotter-toggle`. Versão atual: **2.5.0-linux.1**.
 
+### Ícone
+
+O ícone é gerado a partir de um SVG (fundo transparente). Depois de editá-lo, regere os PNGs do app, do widget e do tema:
+
+```bash
+cd linux/assets/branding
+./render-icons.sh --install-into-theme   # --install-into-theme cuida dos tamanhos do hicolor
+systemctl --user restart plasma-plasmashell   # recarrega o ícone no painel
+```
+
 ---
 
 ## 🔄 Servidor de sincronização
