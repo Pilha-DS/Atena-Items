@@ -14,7 +14,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.openappslabs.jotter.server
+package com.openappslabs.hub
 
 import kotlinx.serialization.Serializable
 
@@ -94,13 +94,6 @@ data class PingResponse(
 )
 
 @Serializable
-data class HealthResponse(
-    val status: String = "ok",
-    val version: String = BuildInfo.VERSION,
-    val notes: Int = 0
-)
-
-@Serializable
 data class StatsResponse(
     val notes: Int = 0,
     val trashed: Int = 0,
@@ -117,7 +110,58 @@ data class ErrorResponse(
     val error: String
 )
 
-object BuildInfo {
-    const val NAME = "jotter-server"
-    const val VERSION = "1.0.0"
-}
+
+// ---------------------------------------------------------------------------
+// Hub: the server is a host for several tools, not only the notes sync.
+// ---------------------------------------------------------------------------
+
+/** What a tool is, as listed by `GET /api/v1/tools`. */
+@Serializable
+data class ToolDto(
+    val id: String = "",
+    val name: String = "",
+    val description: String = "",
+    val version: String = BuildInfo.VERSION
+)
+
+@Serializable
+data class ToolsResponse(
+    val hub: String = BuildInfo.VERSION,
+    val tools: List<ToolDto> = emptyList()
+)
+
+/**
+ * How a tool's data is exposed to another app. The body of an encrypted note is
+ * never sent: only the metadata, so a client can say "this note is locked"
+ * without being able to read it.
+ */
+@Serializable
+data class ToolNoteDto(
+    val uuid: String = "",
+    val title: String = "",
+    val content: String = "",
+    val category: String = "",
+    val createdTime: Long = 0L,
+    val updatedTime: Long = 0L,
+    val format: String = "text",
+    val isPinned: Boolean = false,
+    val isTrashed: Boolean = false,
+    val isEncrypted: Boolean = false
+)
+
+@Serializable
+data class ToolNotesResponse(
+    val tool: String = "jotter",
+    val total: Int = 0,
+    /** When the client asked only for what changed. */
+    val cursor: Long = 0L,
+    val notes: List<ToolNoteDto> = emptyList()
+)
+
+@Serializable
+data class HealthResponse(
+    val status: String = "ok",
+    val version: String = BuildInfo.VERSION,
+    val notes: Int = 0,
+    val tools: Int = 0
+)

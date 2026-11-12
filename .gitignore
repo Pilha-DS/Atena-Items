@@ -30,3 +30,7 @@ release/
 *.db-shm
 *.db-wal
 jotter-server.zip
+
+# ---- Search: clone separado do Vicinae (tem .git e remote próprios) ----
+# Se um dia o Search virar código deste repo, apague a linha abaixo.
+search/

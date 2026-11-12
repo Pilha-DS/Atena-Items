@@ -11,4 +11,4 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "jotter-server"
+rootProject.name = "atena-hub"

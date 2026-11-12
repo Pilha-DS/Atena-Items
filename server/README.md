@@ -1,6 +1,8 @@
-# Jotter Sync Server
+# Atena Hub
 
-Servidor central de sincronização das notas do Jotter (Android e Linux).
+Servidor central das ferramentas do Atena. Hoje ele guarda e sincroniza as notas
+do Jotter (Android e Linux) e serve essas notas, por uma API de leitura, para
+outras ferramentas que não devem ter uma cópia do banco.
 
 Os clients são **local-first**: a nota nasce e vive no SQLite do aparelho. O
 servidor é uma cópia de convergência — se ele estiver desligado, o app continua
@@ -12,6 +14,10 @@ funcionando normalmente e sincroniza quando voltar.
 - Notas criptografadas trafegam e ficam armazenadas **apenas como ciphertext**
 - Nada de telemetria, nada de terceiros
 
+O nome antigo (`jotter-server`) continua aceito: o hub reaproveita o banco
+`jotter-server.db` que já existir e lê as variáveis `JOTTER_*`, então subir a
+versão 2.0.0 não muda nada para os apps que já estão sincronizando.
+
 ---
 
 ## Subir com Docker
@@ -19,35 +25,37 @@ funcionando normalmente e sincroniza quando voltar.
 ```bash
 cd server
 docker compose up -d --build
-docker compose logs -f jotter-server
+docker compose logs -f atena-hub
 ```
 
 No log aparece o token na primeira subida:
 
 ```
 ================================================================
- Jotter sync server 1.0.0 listening on 0.0.0.0:8080
+ Atena Hub 2.0.0 listening on 0.0.0.0:8080
  data file: /data/jotter-server.db
+ tools: jotter 1
 
- sync token (treat it like a password):
+ hub token (treat it like a password):
    3791a9b5ad4a45c7bb45534cbaa67a9c
 ================================================================
 ```
 
-O token fica gravado em `/data/jotter-server.db`, então ele não muda a cada
-restart. Para fixar o seu, crie um `.env` (veja `.env.example`):
+O token fica gravado no banco (`/data/atena-hub.db` ou, num servidor que já
+existia, `/data/jotter-server.db`), então ele não muda a cada restart. Para
+fixar o seu, crie um `.env` (veja `.env.example`):
 
 ```bash
-JOTTER_SERVER_TOKEN=meu-token-secreto
+ATENA_TOKEN=meu-token-secreto
 ```
 
 Se a porta 8080 já estiver em uso na máquina, publique em outra:
 
 ```bash
-JOTTER_HOST_PORT=8090 docker compose up -d --build
+ATENA_HOST_PORT=8090 docker compose up -d --build
 ```
 
-(Para não repetir isso, coloque `JOTTER_HOST_PORT=8090` no `.env`.)
+(Para não repetir isso, coloque `ATENA_HOST_PORT=8090` no `.env`.)
 
 Depois abra `http://IP-DA-MAQUINA:8080` para confirmar que está no ar.
 
@@ -84,19 +92,23 @@ do último sync de cada um.
 
 | Variável | Padrão | Para que serve |
 | --- | --- | --- |
-| `JOTTER_PORT` | `8080` | Porta de escuta |
-| `JOTTER_HOST` | `0.0.0.0` | Endereço de bind |
-| `JOTTER_HOST_PORT` | `8080` | Porta publicada no host pelo Docker (mude se 8080 estiver ocupada) |
-| `JOTTER_DATA_DIR` | `/data` | Diretório do `jotter-server.db` |
-| `JOTTER_SERVER_TOKEN` | gerado | Token fixo (sobrepõe o do banco) |
-| `JOTTER_PUBLIC_URL` | vazio | Só um texto de ajuda na página inicial |
+| `ATENA_PORT` | `8080` | Porta de escuta |
+| `ATENA_HOST` | `0.0.0.0` | Endereço de bind |
+| `ATENA_HOST_PORT` | `8080` | Porta publicada no host pelo Docker (mude se 8080 estiver ocupada) |
+| `ATENA_DATA_DIR` | `/data` | Diretório do banco SQLite |
+| `ATENA_TOKEN` | gerado | Token fixo (sobrepõe o do banco) |
+| `ATENA_PUBLIC_URL` | vazio | Só um texto de ajuda na página inicial |
+
+Os nomes antigos (`JOTTER_PORT`, `JOTTER_HOST_PORT`, `JOTTER_DATA_DIR`,
+`JOTTER_SERVER_TOKEN`, `JOTTER_PUBLIC_URL`) continuam funcionando.
 
 ### Backup do servidor
 
-Tudo está no volume `jotter-data`. Um dump consistente:
+Tudo está no volume `jotter-data` (o nome foi mantido de propósito: renomear
+montaria um volume vazio e pareceria que as notas sumiram). Um dump consistente:
 
 ```bash
-docker compose exec jotter-server sh -c 'cat /data/jotter-server.db' > jotter-server-backup.db
+docker compose exec atena-hub sh -c 'cat /data/atena-hub.db' > atena-hub-backup.db
 ```
 
 ---
@@ -166,6 +178,9 @@ Todas as rotas `/api/*` exigem `Authorization: Bearer <token>` (ou
 | `GET` | `/api/v1/ping` | Valida URL + token |
 | `POST` | `/api/v1/sync` | Push + pull |
 | `GET` | `/api/v1/stats` | Contadores + aparelhos que já sincronizaram |
+| `GET` | `/api/v1/tools` | Ferramentas que o hub publica (hoje: `jotter`) |
+| `GET` | `/api/v1/tools/jotter/notes` | Leitura das notas (busca por `q`, `category`, `limit`) |
+| `GET` | `/api/v1/tools/jotter/notes/{uuid}` | Uma nota |
 
 Exemplo:
 
@@ -205,21 +220,41 @@ Resposta:
 Envie o `cursor` recebido na próxima chamada para baixar só o que mudou.
 `cursor: 0` baixa o conjunto inteiro.
 
----
+### Leitura para outras ferramentas
 
-## Desenvolvimento
+`GET /api/v1/tools/jotter/notes` existe para quem só precisa **ler** as notas.
+A escrita continua sendo exclusiva de `/api/v1/sync`, pelo app dono da nota —
+um leitor nunca consegue corromper o estado local do Jotter.
+
+| Parâmetro | Efeito |
+| --- | --- |
+| `q` | busca por texto; título vale 6, corpo 2 e categoria 1 por termo. Acentos são ignorados (`pao` acha "pão") |
+| `category` | filtra por categoria exata |
+| `limit` | quantas notas devolver (padrão 20, máximo 500) |
+| `updatedAfter` | só notas alteradas depois desse timestamp |
+| `includeTrashed` | `1` inclui a lixeira |
+
+Notas criptografadas vêm com `isEncrypted: true` e **sem** `content`: a senha
+nunca sai do aparelho, então o servidor não tem como abrir o conteúdo.
+
+```bash
+curl -s "http://IP:8080/api/v1/tools/jotter/notes?q=receita&limit=5" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Desenvolvimento
 
 ```bash
 cd server
 ./gradlew run                        # http://localhost:8080
-JOTTER_DATA_DIR=/tmp/jotter ./gradlew run
-./gradlew installDist                # binário em build/install/jotter-server
+ATENA_DATA_DIR=/tmp/atena ./gradlew run
+./gradlew installDist                # binário em build/install/atena-hub
 ```
 
 Testes manuais de ponta a ponta (auth, LWW, tombstone, criptografia) estão em
 [`docs/e2e.sh`](docs/e2e.sh), mas dependem do servidor já rodando:
 
 ```bash
-JOTTER_SERVER_TOKEN=e2e-test-token JOTTER_PORT=8099 ./gradlew run &
+ATENA_TOKEN=e2e-test-token ATENA_PORT=8099 ./gradlew run &
 BASE=http://127.0.0.1:8099 TOKEN=e2e-test-token bash docs/e2e.sh
 ```

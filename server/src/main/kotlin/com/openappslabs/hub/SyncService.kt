@@ -14,7 +14,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.openappslabs.jotter.server
+package com.openappslabs.hub
 
 import org.slf4j.LoggerFactory
 import java.sql.Connection

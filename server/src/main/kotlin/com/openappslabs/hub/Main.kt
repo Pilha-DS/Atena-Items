@@ -1,26 +1,25 @@
 /*
  * Copyright (c) 2026 Open Apps Labs
  *
- * This file is part of Jotter
+ * This file is part of Atena Hub
  *
- * Jotter is free software: you can redistribute it and/or modify it under the terms of the
+ * Atena Hub is free software: you can redistribute it and/or modify it under the terms of the
  * GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
  *
- * Jotter is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+ * Atena Hub is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
  * without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
  * See the GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License along with Jotter.
+ * You should have received a copy of the GNU General Public License along with Atena Hub.
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.openappslabs.jotter.server
+package com.openappslabs.hub
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
-import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
 import io.ktor.server.application.install
 import io.ktor.server.engine.embeddedServer
@@ -42,7 +41,7 @@ import kotlinx.serialization.json.Json
 import org.slf4j.LoggerFactory
 import org.slf4j.event.Level
 
-private val log = LoggerFactory.getLogger("JotterServer")
+private val log = LoggerFactory.getLogger("AtenaHub")
 
 fun main() {
     val config = Config.fromEnv()
@@ -53,7 +52,7 @@ fun main() {
     printBanner(config, database)
 
     embeddedServer(Netty, port = config.port, host = config.host) {
-        jotterModule(database, syncService, config)
+        hubModule(database, syncService, config)
     }.start(wait = true)
 }
 
@@ -65,10 +64,14 @@ private fun printBanner(config: Config, database: Database) {
     val token = database.authToken()
     val line = "=".repeat(64)
     log.info(line)
-    log.info(" Jotter sync server {} listening on {}:{}", BuildInfo.VERSION, config.host, config.port)
+    log.info(" Atena Hub {} listening on {}:{}", BuildInfo.VERSION, config.host, config.port)
     log.info(" data file: {}", config.databaseFile.toAbsolutePath())
+    if (config.isUsingLegacyDatabase) {
+        log.info(" using the previous Jotter database (nothing to migrate)")
+    }
+    log.info(" tools: {}", Tools.all.joinToString { "${it.id} ${it.version}" })
     log.info("")
-    log.info(" sync token (treat it like a password):")
+    log.info(" hub token (treat it like a password):")
     log.info("   {}", token)
     log.info("")
     log.info(" clients: server URL = http://<this-machine>:{}", config.port)
@@ -76,7 +79,7 @@ private fun printBanner(config: Config, database: Database) {
     log.info(line)
 }
 
-private fun Application.jotterModule(
+private fun Application.hubModule(
     database: Database,
     syncService: SyncService,
     config: Config
@@ -117,7 +120,9 @@ private fun Application.jotterModule(
             val notes = database.read { connection ->
                 connection.query("SELECT COUNT(*) FROM notes") { it.getInt(1) } ?: 0
             }
-            call.respond(HealthResponse(status = "ok", notes = notes))
+            call.respond(
+                HealthResponse(status = "ok", notes = notes, tools = Tools.all.size)
+            )
         }
 
         get("/") {
@@ -126,12 +131,18 @@ private fun Application.jotterModule(
 
         route("/api/v1") {
             get("/ping") {
-                if (!call.authorize(database)) return@get
+                if (!call.requireToken(database)) return@get
                 call.respond(PingResponse(serverTime = System.currentTimeMillis()))
             }
 
+            /** Discovery: what this hub hosts, so clients can adapt. */
+            get("/tools") {
+                if (!call.requireToken(database)) return@get
+                call.respond(ToolsResponse(tools = Tools.all.map(ToolInfo::toDto)))
+            }
+
             get("/stats") {
-                if (!call.authorize(database)) return@get
+                if (!call.requireToken(database)) return@get
                 val stats = database.read { connection ->
                     StatsResponse(
                         notes = connection.query("SELECT COUNT(*) FROM notes WHERE is_trashed = 0") { it.getInt(1) } ?: 0,
@@ -148,31 +159,21 @@ private fun Application.jotterModule(
                 call.respond(stats)
             }
 
+            /**
+             * Legacy path, kept exactly as it was: the Jotter apps on Android
+             * and Linux are already deployed and must keep syncing.
+             */
             post("/sync") {
-                if (!call.authorize(database)) return@post
+                if (!call.requireToken(database)) return@post
                 val request = call.receive<SyncRequest>()
                 val remoteIp = call.request.origin.remoteHost
                 call.respond(syncService.sync(request, remoteIp))
             }
+
+            // Read API used by other tools (read-only consumers of the notes).
+            jotterNotesApi(database)
         }
     }
-}
-
-/**
- * Bearer token check. There is a single token per server instance, generated on
- * first start (or fixed with `JOTTER_SERVER_TOKEN`), which is exactly the
- * "only my devices may sync" rule without an account system to maintain.
- */
-private suspend fun ApplicationCall.authorize(database: Database): Boolean {
-    val header = request.headers["Authorization"]
-    val provided = when {
-        header != null && header.startsWith("Bearer ", ignoreCase = true) ->
-            header.substring("Bearer ".length).trim()
-        else -> request.headers["X-Jotter-Token"]?.trim()
-    }
-    if (database.tokenMatches(provided)) return true
-    respond(HttpStatusCode.Unauthorized, ErrorResponse("invalid or missing sync token"))
-    return false
 }
 
 private fun indexPage(config: Config, database: Database): String {
@@ -196,17 +197,22 @@ private fun indexPage(config: Config, database: Database): String {
         "<tr><td colspan=\"3\" class=\"muted\">No device has synced yet.</td></tr>"
     }
 
+    val toolRows = Tools.all.joinToString("") { tool ->
+        "<tr><td><code>${escapeHtml(tool.id)}</code></td><td>${escapeHtml(tool.name)}</td>" +
+            "<td class=\"muted\">${escapeHtml(tool.description)}</td></tr>"
+    }
+
     return """
         <!doctype html>
-        <html lang="en">
+        <html lang="pt-BR">
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>Jotter sync server</title>
+          <title>Atena Hub</title>
           <style>
             body { font-family: system-ui, sans-serif; margin: 0; padding: 32px;
                    background: #17191c; color: #e8eaed; }
-            main { max-width: 720px; margin: 0 auto; }
+            main { max-width: 760px; margin: 0 auto; }
             code, pre { background: #24272b; border-radius: 6px; padding: 2px 6px; }
             pre { padding: 14px; overflow-x: auto; }
             h1 { font-size: 1.4rem; }
@@ -218,21 +224,28 @@ private fun indexPage(config: Config, database: Database): String {
         </head>
         <body>
           <main>
-            <h1>Jotter sync server ${BuildInfo.VERSION}</h1>
-            <p class="muted">Running. This endpoint only serves the Jotter apps.</p>
-            <p>Notes stored: <strong>${stats.first}</strong> · cursor: <strong>${stats.second.first}</strong></p>
-            <h2>Devices</h2>
+            <h1>Atena Hub ${BuildInfo.VERSION}</h1>
+            <p class="muted">Servidor de ferramentas. Hoje o dono das notas é o Jotter.</p>
+            <p>Notas armazenadas: <strong>${stats.first}</strong> · cursor: <strong>${stats.second.first}</strong></p>
+
+            <h2>Ferramentas</h2>
             <table>
-              <tr><th>Name</th><th>Last IP</th><th>Last sync</th></tr>
+              <tr><th>ID</th><th>Nome</th><th>Descrição</th></tr>
+              $toolRows
+            </table>
+
+            <h2>Dispositivos</h2>
+            <table>
+              <tr><th>Nome</th><th>Último IP</th><th>Último sync</th></tr>
               $deviceRows
             </table>
-            <h2>Connect a device</h2>
-            <p>Open <em>Settings → Sync</em> in the app and enter only:</p>
-            <pre>Server URL: ${config.publicUrl ?: "http://<this-machine>:${config.port}"}
-Token:      (printed in the container log at startup)</pre>
-            <p>The app asks for a name for this device, then syncs right away.</p>
-            <p class="muted">Token: check <code>docker compose logs</code>.
-            To pin it yourself, set <code>JOTTER_SERVER_TOKEN</code>.</p>
+
+            <h2>Conectar um aplicativo</h2>
+            <p>No app, abra <em>Configurações → Sync</em> e informe:</p>
+            <pre>Server URL: ${config.publicUrl ?: "http://<esta-máquina>:${config.port}"}
+Token:      (impresso no log na inicialização)</pre>
+            <p>O token fica gravado no banco do hub, então ele não muda a cada restart.
+            Para fixá-lo, use <code>ATENA_TOKEN</code>.</p>
           </main>
         </body>
         </html>

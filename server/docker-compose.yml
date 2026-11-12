@@ -1,22 +1,26 @@
 services:
-  jotter-server:
+  atena-hub:
     build: .
-    image: jotter-server:1.0.0
-    container_name: jotter-server
+    image: atena-hub:2.0.0
+    container_name: atena-hub
     restart: unless-stopped
     ports:
       # host:container — change the host port if 8080 is already taken
       # (phpMyAdmin, another dev server...). Also settable in .env as
-      # JOTTER_HOST_PORT so clients can keep the URL stable.
-      - "${JOTTER_HOST_PORT:-8080}:8080"
+      # ATENA_HOST_PORT so clients can keep the URL stable.
+      - "${ATENA_HOST_PORT:-8080}:8080"
     environment:
       # Leave empty to have a token generated on first start (printed in the log).
-      # Set it to pin your own token; it must then match what the clients use.
-      JOTTER_SERVER_TOKEN: ${JOTTER_SERVER_TOKEN:-}
+      # Set it to pin your own token; it must then match the token in the apps.
+      ATENA_TOKEN: ${ATENA_TOKEN:-}
       # Optional, only used as a hint on the start page.
-      JOTTER_PUBLIC_URL: ${JOTTER_PUBLIC_URL:-}
+      ATENA_PUBLIC_URL: ${ATENA_PUBLIC_URL:-}
     volumes:
       # The database lives here. Back this volume up; it is your server copy.
+      #
+      # The volume keeps the old name on purpose: renaming it would mount an
+      # empty directory and look like every note had been deleted. The hub
+      # also reuses an existing `jotter-server.db` inside it.
       - jotter-data:/data
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]

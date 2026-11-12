@@ -14,7 +14,7 @@
  * If not, see <https://www.gnu.org/licenses/>.
  */
 
-package com.openappslabs.jotter.server
+package com.openappslabs.hub
 
 import org.slf4j.LoggerFactory
 import java.nio.file.Files
@@ -22,7 +22,6 @@ import java.nio.file.Path
 import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.ResultSet
-import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -49,14 +48,14 @@ class Database(private val file: Path) {
             createSchema(connection)
             token = if (tokenOverride != null) {
                 setMeta(connection, KEY_TOKEN, tokenOverride)
-                log.info("using the token from JOTTER_SERVER_TOKEN")
+                log.info("using the token from the environment (ATENA_TOKEN)")
                 tokenOverride
             } else {
                 val existing = meta(connection, KEY_TOKEN)
                 if (existing != null) {
                     existing
                 } else {
-                    val generated = UUID.randomUUID().toString().replace("-", "")
+                    val generated = newToken()
                     setMeta(connection, KEY_TOKEN, generated)
                     log.info("generated a new sync token (it is stored in the database)")
                     generated

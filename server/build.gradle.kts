@@ -6,7 +6,7 @@ plugins {
     application
 }
 
-group = "com.openappslabs.jotter"
+group = "com.openappslabs.hub"
 version = "1.0.0"
 
 repositories {
@@ -36,7 +36,7 @@ dependencies {
 }
 
 application {
-    mainClass.set("com.openappslabs.jotter.server.MainKt")
+    mainClass.set("com.openappslabs.hub.MainKt")
     applicationDefaultJvmArgs = listOf("-Dfile.encoding=UTF-8")
 }
 
