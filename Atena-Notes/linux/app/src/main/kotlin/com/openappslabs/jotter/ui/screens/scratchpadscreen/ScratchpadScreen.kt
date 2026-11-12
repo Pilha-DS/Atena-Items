@@ -82,10 +82,23 @@ fun ScratchpadScreen(
     val strings = LocalStrings.current
     var noteId by remember { mutableStateOf<Int?>(null) }
     var text by remember { mutableStateOf("") }
-    var isLoading by remember { mutableStateOf(true) }
+    // Nothing may be written (nor flushed) before the stored text is on screen:
+    // an empty buffer saved during startup is what used to erase the note.
+    var loaded by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        val note = AppGraph.notesRepository.getOrCreateScratchpad()
+        val note = runCatching { AppGraph.notesRepository.getOrCreateScratchpad() }
+            .onFailure { Diagnostics.log("scratchpad open failed: ${it.stackTraceToString()}") }
+            .getOrNull()
+        if (note == null) {
+            // Never leave the window blank when the database hiccups: whatever
+            // the mirror holds is still better than an empty note, and no write
+            // happens until the row is known.
+            text = ScratchpadRecovery.read()
+            loaded = true
+            Startup.onGeneralNoteReady()
+            return@LaunchedEffect
+        }
         noteId = note.id
         // The database wins; the recovery mirror is only a fallback for when it
         // comes back empty (wiped or unreadable schema).
@@ -93,7 +106,7 @@ fun ScratchpadScreen(
             ScratchpadRecovery.read().also { restored ->
                 if (restored.isNotBlank()) {
                     Diagnostics.log("scratchpad restored from mirror (${restored.length} chars)")
-                    AppGraph.notesRepository.saveScratchpad(note.id, restored)
+                    runCatching { AppGraph.notesRepository.saveScratchpad(note.id, restored) }
                 }
             }
         } else {
@@ -103,7 +116,8 @@ fun ScratchpadScreen(
         // This text just came from the database (or was written back above):
         // mark it as stored so opening the note does not write it again.
         ScratchpadSaver.markPersisted(text)
-        isLoading = false
+        loaded = true
+        Diagnostics.log("scratchpad opened: ${text.length} chars (id=${note.id})")
         // The general note has priority when Jotter opens. Waiting for two
         // frames guarantees this text was painted before the notes list and
         // the plasmoid counter start reading the whole table.
@@ -114,18 +128,25 @@ fun ScratchpadScreen(
 
     // Every change is handed to the writer immediately; it serializes the
     // writes and retries failures instead of dropping them.
-    LaunchedEffect(text, isLoading) {
+    LaunchedEffect(text, loaded) {
+        if (!loaded) return@LaunchedEffect
         val id = noteId ?: return@LaunchedEffect
-        if (isLoading) return@LaunchedEffect
         ScratchpadSaver.submit(id, text)
     }
 
     // Hiding the widget, quitting or logging out must never lose the last words
     // typed: this flush waits for the write to actually reach SQLite.
     DisposableEffect(noteId) {
-        val id = noteId ?: return@DisposableEffect onDispose {}
-        val unregister = AutoSave.register { ScratchpadSaver.flushBlocking(id, text) }
-        onDispose { unregister() }
+        val id = noteId
+        val unregister = AutoSave.register {
+            if (id != null && loaded) ScratchpadSaver.flushBlocking(id, text)
+        }
+        onDispose {
+            unregister()
+            // The window is leaving the composition (the note was closed): make
+            // sure the text is on disk before the state disappears with it.
+            if (id != null && loaded) ScratchpadSaver.flushBlocking(id, text)
+        }
     }
 
     val onSurfaceColor = MaterialTheme.colorScheme.onSurface
@@ -159,7 +180,7 @@ fun ScratchpadScreen(
                     .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
                     .verticalScroll(scrollState)
             )
-            if (text.isEmpty() && !isLoading) {
+            if (text.isEmpty() && loaded) {
                 Text(
                     text = strings.typeAnything,
                     style = textStyle,
