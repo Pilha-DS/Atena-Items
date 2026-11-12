@@ -61,6 +61,7 @@ import com.openappslabs.jotter.ui.components.NoteOptionsSheet
 import com.openappslabs.jotter.ui.components.NotePasswordDialog
 import com.openappslabs.jotter.ui.components.NotePasswordMode
 import com.openappslabs.jotter.ui.components.SearchBar
+import com.openappslabs.jotter.ui.screens.syncscreen.syncErrorMessage
 import com.openappslabs.jotter.ui.theme.rememberJotterHaptics
 import com.openappslabs.jotter.data.model.Note
 import com.openappslabs.jotter.data.model.NoteFormat
@@ -82,10 +83,21 @@ fun HomeScreen(
 ) {
     val haptics = rememberJotterHaptics()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
+    val syncFeedback by viewModel.syncFeedback.collectAsStateWithLifecycle()
     val listState = rememberLazyStaggeredGridState()
     val context = LocalContext.current
     val strings = LocalStrings.current
     val locale = strings.locale
+
+    // One toast per manual reload: the result, or why the server said no.
+    LaunchedEffect(syncFeedback?.id) {
+        val feedback = syncFeedback ?: return@LaunchedEffect
+        val message = feedback.error?.let { syncErrorMessage(it, strings) }
+            ?: strings.syncResult(feedback.pushed, feedback.pulled)
+        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        viewModel.clearSyncFeedback()
+    }
 
     var showSortSheet by remember { mutableStateOf(false) }
     val sortSheetState = rememberModalBottomSheetState()
@@ -149,6 +161,8 @@ fun HomeScreen(
                     haptics.click()
                     onSettingsClick()
                 },
+                onSyncClick = if (syncState.configured) viewModel::syncNow else null,
+                isSyncing = syncState.running,
                 modifier = Modifier.padding(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 8.dp)
             )
 

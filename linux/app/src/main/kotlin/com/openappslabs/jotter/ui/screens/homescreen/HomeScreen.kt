@@ -66,6 +66,7 @@ import com.openappslabs.jotter.data.model.NoteFormat
 import com.openappslabs.jotter.platform.AppLock
 import com.openappslabs.jotter.platform.ScratchpadWindow
 import com.openappslabs.jotter.platform.Toaster
+import com.openappslabs.jotter.ui.screens.syncscreen.syncErrorMessage
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -83,15 +84,27 @@ fun HomeScreen(
         HomeScreenViewModel(
             AppGraph.notesRepository,
             AppGraph.categoryRepository,
-            AppGraph.userPreferencesRepository
+            AppGraph.userPreferencesRepository,
+            AppGraph.syncEngine
         )
     }
 ) {
     val haptics = rememberJotterHaptics()
     val uiState by viewModel.uiState.collectAsState()
+    val syncState by viewModel.syncState.collectAsState()
+    val syncFeedback by viewModel.syncFeedback.collectAsState()
     val listState = rememberLazyStaggeredGridState()
     val strings = LocalStrings.current
     val locale = strings.locale
+
+    // One toast per manual reload: the result, or why the server said no.
+    LaunchedEffect(syncFeedback?.id) {
+        val feedback = syncFeedback ?: return@LaunchedEffect
+        val message = feedback.error?.let { syncErrorMessage(it, strings) }
+            ?: strings.syncResult(feedback.pushed, feedback.pulled)
+        Toaster.show(message)
+        viewModel.clearSyncFeedback()
+    }
 
     var showSortSheet by remember { mutableStateOf(false) }
     val sortSheetState = rememberModalBottomSheetState()
@@ -158,6 +171,8 @@ fun HomeScreen(
                     haptics.click()
                     onSettingsClick()
                 },
+                onSyncClick = if (syncState.configured) viewModel::syncNow else null,
+                isSyncing = syncState.running,
                 isScratchpadVisible = ScratchpadWindow.isVisible,
                 onScratchpadClick = {
                     haptics.tick()

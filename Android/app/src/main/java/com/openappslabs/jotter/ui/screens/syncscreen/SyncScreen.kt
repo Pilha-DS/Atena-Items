@@ -189,7 +189,7 @@ fun SyncScreen(
                                             .size(16.dp)
                                     )
                                     Text(
-                                        text = errorMessage(error, strings),
+                                        text = syncErrorMessage(error, strings),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.padding(start = 6.dp)
@@ -346,7 +346,7 @@ fun SyncScreen(
                                             .size(16.dp)
                                     )
                                     Text(
-                                        text = errorMessage(error, strings),
+                                        text = syncErrorMessage(error, strings),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.error,
                                         modifier = Modifier.padding(start = 6.dp)
@@ -484,7 +484,7 @@ private fun lastSyncLabel(lastSyncAt: Long, never: String): String =
         SimpleDateFormat("dd MMM yyyy · HH:mm", Locale.getDefault()).format(Date(lastSyncAt))
     }
 
-private fun errorMessage(error: SyncErrorKind, strings: AppStrings): String = when (error) {
+internal fun syncErrorMessage(error: SyncErrorKind, strings: AppStrings): String = when (error) {
     SyncErrorKind.NOT_CONFIGURED -> strings.syncErrorNotConfigured
     SyncErrorKind.UNAUTHORIZED -> strings.syncErrorUnauthorized
     SyncErrorKind.NETWORK -> strings.syncErrorNetwork

@@ -40,8 +40,10 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -79,7 +81,10 @@ fun SearchBar(
     onProfileClick: () -> Unit,
     onSettingsClick: () -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String? = null
+    placeholder: String? = null,
+    /** Shown only when sync is configured: pulls the notes written elsewhere. */
+    onSyncClick: (() -> Unit)? = null,
+    isSyncing: Boolean = false
 ) {
     val haptics = rememberJotterHaptics()
     val focusManager = LocalFocusManager.current
@@ -199,6 +204,33 @@ fun SearchBar(
                     keyboardActions = keyboardActions,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            if (onSyncClick != null) {
+                if (isSyncing) {
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = primaryColor
+                        )
+                    }
+                } else {
+                    IconButton(onClick = {
+                        haptics.click()
+                        onSyncClick()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Refresh,
+                            contentDescription = strings.syncReload,
+                            tint = onSurfaceVariantColor,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                }
             }
 
             Crossfade(

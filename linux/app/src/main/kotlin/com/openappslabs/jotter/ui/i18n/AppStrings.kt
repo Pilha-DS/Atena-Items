@@ -313,6 +313,7 @@ interface AppStrings {
     val syncChecking: String
     val syncEdit: String
     val syncNow: String
+    val syncReload: String
     val syncConnect: String
     val syncDisconnect: String
     val syncLastSync: String
@@ -636,6 +637,7 @@ object EnglishStrings : BaseStrings() {
     override val syncChecking = "Checking the connection…"
     override val syncEdit = "Change server"
     override val syncNow = "Sync now"
+    override val syncReload = "Reload from server"
     override val syncConnect = "Connect"
     override val syncDisconnect = "Disconnect"
     override val syncLastSync = "Last sync"
@@ -962,6 +964,7 @@ object PortugueseStrings : BaseStrings() {
     override val syncChecking = "Testando a conexão…"
     override val syncEdit = "Trocar servidor"
     override val syncNow = "Sincronizar agora"
+    override val syncReload = "Recarregar do servidor"
     override val syncConnect = "Conectar"
     override val syncDisconnect = "Desconectar"
     override val syncLastSync = "Última sincronização"

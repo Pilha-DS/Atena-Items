@@ -27,10 +27,13 @@ import com.openappslabs.jotter.data.repository.NotesRepository
 import com.openappslabs.jotter.data.repository.UserPreferencesRepository
 import com.openappslabs.jotter.data.model.SortDirection
 import com.openappslabs.jotter.data.model.SortType
+import com.openappslabs.jotter.data.sync.SyncEngine
+import com.openappslabs.jotter.data.sync.SyncErrorKind
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -44,10 +47,36 @@ import kotlin.comparisons.then
 class HomeScreenViewModel @Inject constructor(
     private val notesRepository: NotesRepository,
     private val categoryRepository: CategoryRepository,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val userPreferencesRepository: UserPreferencesRepository,
+    private val syncEngine: SyncEngine
 ) : ViewModel() {
     private val _selectedCategory = MutableStateFlow("All")
     private val _searchQuery = MutableStateFlow("")
+
+    /** Drives the reload button in the search bar. */
+    val syncState = syncEngine.state
+
+    private val _syncFeedback = MutableStateFlow<SyncFeedback?>(null)
+    val syncFeedback = _syncFeedback.asStateFlow()
+    private var feedbackId = 0L
+
+    /** Pulls from the server on demand, instead of waiting for the periodic tick. */
+    fun syncNow() {
+        viewModelScope.launch {
+            syncEngine.syncNow()
+            val state = syncEngine.state.value
+            _syncFeedback.value = SyncFeedback(
+                id = ++feedbackId,
+                pushed = state.pushed,
+                pulled = state.pulled,
+                error = state.error
+            )
+        }
+    }
+
+    fun clearSyncFeedback() {
+        _syncFeedback.value = null
+    }
 
     val uiState: StateFlow<UiState> = combine(
         notesRepository.getAllNotes(),
@@ -249,3 +278,12 @@ class HomeScreenViewModel @Inject constructor(
     fun onNoteClicked(noteId: Int) {
     }
 }
+
+/** Result of one manual reload, shown as a toast/snackbar by the home screen. */
+@Immutable
+data class SyncFeedback(
+    val id: Long,
+    val pushed: Int,
+    val pulled: Int,
+    val error: SyncErrorKind?
+)
