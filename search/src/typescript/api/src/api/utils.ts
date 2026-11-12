@@ -1,0 +1,193 @@
+import type { PathLike } from "node:fs";
+import { rm } from "node:fs/promises";
+import { WindowManagement } from "./window-management";
+import type { Application, NotificationUrgency } from "./proto/api";
+import { getClient } from "./client";
+import { ImageLike, serializeProtoImage } from "./image";
+
+/**
+  @ignore - we should probably move this to raycast compat, I don't think we want that.
+ */
+export const trash = async (path: PathLike | PathLike[]): Promise<void> => {
+	const targets = Array.isArray(path) ? path : [path];
+	const promises = targets.map((p) => rm(p, { recursive: true }));
+
+	await Promise.all(promises);
+};
+
+/**
+ * Additional options that can be passed in order to tweak the behavior of the terminal window.
+ * Note that most options are best-effort, which means that they may or may not work depending on
+ * the default terminal emulator that is available.
+ * On Linux, Vicinae honors the xdg-terminal-exec specification: https://gitlab.freedesktop.org/terminal-wg/specifications/-/merge_requests/3/diffs
+ *
+ * @category System
+ */
+export type RunInTerminalOptions = {
+	/**
+	 * Ensure the terminal window is held open after the execution of the command completes.
+	 * This option is provided as a hint to the default terminal emulator, and might not be honored.
+	 */
+	hold?: boolean;
+
+	/**
+	 * Overrides the application ID used for this specific terminal window.
+	 * Can be useful if you want to target this window by its class with the window management API.
+	 * This option is provided as a hint to the default terminal emulator, and might not be honored.
+	 *
+	 * @see WindowManagement
+	 */
+	appId?: string;
+
+	/**
+	 * Overrides the title used for this specific terminal window.
+	 * Can be useful if you want to target this window by its title with the window management API.
+	 * This option is provided as a hint to the default terminal emulator, and might not be honored.
+	 *
+	 * @see WindowManagement
+	 */
+	title?: string;
+
+	/**
+	 * Sets the current working directory for the terminal program.
+	 */
+	workingDirectory?: string;
+};
+
+/**
+ * @category System
+ */
+export type ShowInFileBrowserOptions = {
+	/**
+	 * Reveal the item selected in its containing folder instead of just opening the target path.
+	 */
+	select?: boolean;
+};
+
+/**
+ * Run a command in a new terminal emulator window.
+ *
+ * @param args - the command line to execute. This is *not* getting interpreted by a shell.
+ * @param options - list of options that can be passed in order to tweak the behavior of the terminal window.
+ *
+ * @example
+ * ```typescript
+ * await runInTerminal(['journalctl', '--user', '-u', '-f', 'vicinae']);
+ * // or, inside a shell:
+ * await runInTerminal(['/bin/bash', '-c', 'echo "dis is my home: $HOME"'], { hold: true });
+ * ```
+ *
+ * @category System
+ */
+export const runInTerminal = async (
+	args: string[],
+	options: RunInTerminalOptions = {},
+) => {
+	const { hold = false, appId, title, workingDirectory } = options;
+
+	await getClient().Application.runInTerminal({
+		cmdline: args,
+		hold,
+		appId,
+		title,
+		workingDirectory,
+	});
+};
+
+/**
+ * @category System
+ */
+export const open = async (target: string, app?: Application | string) => {
+	let appId: string | undefined;
+
+	if (app) {
+		if (typeof app === "string") {
+			appId = app;
+		} else {
+			appId = app.id;
+		}
+	}
+
+	await getClient().Application.open(target, appId);
+};
+
+/**
+ * @category System
+ */
+export const getFrontmostApplication = async (): Promise<Application> => {
+	const { application } = await WindowManagement.getActiveWindow();
+
+	if (!application) {
+		throw new Error(`Could not get frontmost application`);
+	}
+
+	return application;
+};
+
+/**
+ * @category System
+ */
+export const getApplications = async (
+	target?: string,
+): Promise<Application[]> => {
+	return getClient().Application.list(target);
+};
+
+/**
+ * @category System
+ */
+export const getDefaultApplication = async (
+	path: string,
+): Promise<Application> => {
+	return getClient().Application.getDefault(path);
+};
+
+/**
+ * @category System
+ */
+export const showInFileBrowser = async (
+	path: PathLike,
+	options: ShowInFileBrowserOptions = {},
+): Promise<void> => {
+	await getClient().Application.showInFileBrowser(
+		path.toString(),
+		options.select ?? true,
+	);
+};
+
+export type DesktopNotificationOptions = {
+	/**
+	 * The title of the notification, usually shown at the very top.
+	 */
+	title: string;
+
+	/**
+	 * The content of the notification.
+	 * How much you can fit in there highly depends on the capabilities of the running notification server.
+	 * Similarly, your notification server may accept the use of some markup language to further style the content.
+	 */
+	body: string;
+
+	/**
+	 * Icon used to represent the notification, usually positionned on the left.
+	 */
+	icon?: ImageLike;
+
+	/**
+	 * Urgency level associated with the notification.
+	 */
+	urgency?: NotificationUrgency;
+};
+
+/**
+ * @category System
+ */
+export const sendDesktopNotification = (payload: DesktopNotificationOptions) =>
+	getClient().UI.sendDesktopNotification({
+		title: payload.title,
+		body: payload.body,
+		icon: payload.icon ? serializeProtoImage(payload.icon) : undefined,
+		urgency: payload.urgency ?? "Normal",
+	});
+
+export type { Application } from "./proto/api";

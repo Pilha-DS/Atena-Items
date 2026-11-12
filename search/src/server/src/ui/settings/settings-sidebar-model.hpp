@@ -1,0 +1,66 @@
+#pragma once
+#include "services/builtin-icon/builtin-icon.hpp"
+#include <QtQml/qqmlregistration.h>
+#include <string>
+#include <vector>
+#include <QAbstractListModel>
+
+class ExtensionSettingsModel;
+namespace AI {
+class ToolRegistry;
+}
+
+// Flat list model backing the settings sidebar. Holds core pages, installed
+// extensions and (while searching) the matching commands and AI tools nested under
+// their provider, plus divider rows. Filtering happens in C++ via setQuery().
+class SettingsSidebarModel : public QAbstractListModel {
+  Q_OBJECT
+  QML_ANONYMOUS
+
+public:
+  enum Role {
+    KeyRole = Qt::UserRole + 1,
+    KindRole,
+    LabelRole,
+    IconRole,
+    IconSourceRole,
+    EnabledRole,
+  };
+
+  SettingsSidebarModel(ExtensionSettingsModel *extModel, const AI::ToolRegistry &tools,
+                       QObject *parent = nullptr);
+
+  int rowCount(const QModelIndex &parent = {}) const override;
+  QVariant data(const QModelIndex &index, int role) const override;
+  QHash<int, QByteArray> roleNames() const override;
+
+  Q_INVOKABLE void setQuery(const QString &query);
+  // Navigation helpers used by the sidebar's keyboard handling. They operate on
+  // row indices so QML never has to materialize the row list.
+  Q_INVOKABLE int indexOfKey(const QString &key) const;
+  Q_INVOKABLE QString keyAt(int row) const;
+  Q_INVOKABLE QString kindAt(int row) const;
+  // Settings page a row opens: the row's own key, or the owning extension for tool rows.
+  Q_INVOKABLE QString pageAt(int row) const;
+  Q_INVOKABLE int firstSelectableRow() const;
+  Q_INVOKABLE int stepRow(int fromRow, int delta) const;
+
+private:
+  struct Row {
+    QString key;
+    QString kind;
+    QString label;
+    BuiltinIcon icon = BuiltinIcon::QuestionMarkCircle;
+    QString iconSource;
+    bool enabled = true;
+    QString page;
+  };
+
+  void rebuildRows();
+  void setProviderEnabled(const QString &providerId, bool enabled);
+  int lastSelectableRow() const;
+
+  std::vector<Row> m_rows;
+  const AI::ToolRegistry &m_tools;
+  std::string m_query;
+};

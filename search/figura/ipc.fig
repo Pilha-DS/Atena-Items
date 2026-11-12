@@ -1,0 +1,190 @@
+// CLI / browser extension <-> server IPC protocol
+// Served over a Unix domain socket at $XDG_RUNTIME_DIR/vicinae/vicinae.sock
+
+struct PingResponse {
+  version: string;
+  pid: int;
+};
+
+struct DeeplinkRequest {
+  url: string;
+};
+
+struct DeeplinkResponse {
+  error?: string;
+};
+
+struct DescribeResponse {
+  open: bool;
+  entrypoint: string;
+};
+
+struct LaunchAppRequest {
+  appId: string;
+  args: string[];
+  newInstance: bool;
+};
+
+struct LaunchAppResponse {
+  error?: string;
+  focusedWindowTitle: string;
+};
+
+struct LaunchCommandRequest {
+  entrypoint: string;
+  args: string[];
+  cwd?: string;
+  query?: string;
+};
+
+struct LaunchCommandResponse {
+  error?: string;
+};
+
+struct CommandInfo {
+  id: string;
+  name: string;
+};
+
+struct ListCommandsResponse {
+  commands: CommandInfo[];
+};
+
+enum DMenuOutputFormat {
+  Data,
+  Index
+};
+
+struct DMenuRequest {
+  rawContent: string;
+  navigationTitle?: string;
+  placeholder?: string;
+  format: DMenuOutputFormat;
+  sectionTitle?: string;
+  noSection: bool;
+  noQuickLook: bool;
+  noIcon: bool;
+  noMetadata: bool;
+  query?: string;
+  width?: int;
+  height?: int;
+  noFooter: bool;
+  password: bool;
+};
+
+struct DMenuResponse {
+  output: string;
+};
+
+struct BrowserInitRequest {
+  id: string;
+  name: string;
+  engine: string;
+  version?: string;
+  // granted optional permissions, absent on extensions predating optional permissions
+  permissions?: string[];
+  // permissions the extension can request, absent on extensions predating history support
+  optionalPermissions?: string[];
+  // absent on extensions predating the browser* client methods, which are no longer supported
+  protocolVersion?: int;
+};
+
+struct BrowserTabInfo {
+  id: int;
+  windowId: int;
+  title: string;
+  url: string;
+  active: bool;
+  muted: bool;
+  audible: bool;
+  lastAccessed: double;
+  pinned: bool;
+};
+
+struct BrowserBookmarkInfo {
+  id: string;
+  title: string;
+  url: string;
+  folder: string[];
+  dateAdded: double;
+};
+
+struct BrowserHistoryItemInfo {
+  id: string;
+  title: string;
+  url: string;
+  lastVisitTime: double;
+  visitCount: int;
+};
+
+struct FileResult {
+  path: string;
+  score: uint;
+  category: string;
+  mimeType?: string;
+};
+
+struct FsQueryParams {
+  limit: int;
+  category?: string;
+};
+
+struct AiModel {
+  id: string;
+  name: string;
+  capabilities: string[];
+};
+
+struct AiListModelsResponse {
+  models: AiModel[];
+};
+
+struct AiAskRequest {
+  prompt: string;
+  // text handed to the model before the prompt, typically piped stdin
+  context?: string;
+  model?: string;
+  system?: string;
+  // absolute paths of images or text files, read by the server
+  attachments: string[];
+};
+
+struct AiAskResponse {
+  completionId: string;
+  model: string;
+};
+
+service Ipc {
+  fn ping() => PingResponse;
+  fn deeplink(req: DeeplinkRequest) => DeeplinkResponse;
+  fn describe() => DescribeResponse;
+  fn launchApp(req: LaunchAppRequest) => LaunchAppResponse;
+  fn listCommands() => ListCommandsResponse;
+  fn launchCommand(req: LaunchCommandRequest) => LaunchCommandResponse;
+  fn dmenu(req: DMenuRequest) => DMenuResponse;
+  fn browserInit(req: BrowserInitRequest) => void;
+  fn browserTabsChanged(tabs: BrowserTabInfo[]) => void;
+  fn browserPermissionsChanged(permissions: string[]) => void;
+
+  // filesystem
+  fn fsQuery(q: string, params: FsQueryParams) => FileResult[];
+
+  // AI: aiAsk answers with the completion id, the text then arrives through aiData until done
+  fn aiListModels() => AiListModelsResponse;
+  fn aiAsk(req: AiAskRequest) => AiAskResponse;
+  event aiData(completionId: string, data: string, done: bool);
+  event aiFailed(completionId: string, error: string);
+
+  fn mcpSend(message: string) => void;
+  event mcpMessage(message: string);
+
+  // implemented by the browser extension
+  client fn browserFocusTab(tabId: int) => void;
+  client fn browserCloseTab(tabId: int) => void;
+  client fn browserGetBookmarks() => BrowserBookmarkInfo[];
+  client fn browserRemoveBookmark(bookmarkId: string) => void;
+  client fn browserSearchHistory(query: string, maxResults: int) => BrowserHistoryItemInfo[];
+  client fn browserRemoveHistoryUrl(url: string) => void;
+  client fn browserClearHistory() => void;
+  client fn browserRequestPermission(permission: string) => void;
+}

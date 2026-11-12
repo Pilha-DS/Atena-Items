@@ -1,0 +1,53 @@
+// manager (client) to extension (server)
+// the worker is already provisioned but waiting for the manager to initialize it with extension info (to avoid cold starts)
+
+enum CommandMode {
+  View,
+  NoView
+};
+
+enum CommandEnv {
+  Development,
+  Production
+};
+
+enum LaunchType {
+  User,
+  Background,
+  CommandLine
+};
+
+struct Capabilities {
+  browserExtension: bool;
+  windowManagement: bool;
+  wallpaper: bool;
+  fileSearch: bool;
+};
+
+struct LaunchEventData {
+  extension_name: string;
+  command_name: string;
+  mode: CommandMode;
+  entrypoint: string;
+  asset_path: string;
+  support_path: string;
+  preferenceValues: any;
+  argumentValues: any;
+  launch_context: any;
+  is_raycast: bool;
+  owner_or_author_name: string;
+  launch_type: LaunchType;
+  capabilities: Capabilities;
+  fallbackText?: string;
+  cwd?: string;
+};
+
+service Lifecycle {
+  fn launch(data: LaunchEventData) => bool;
+  fn shutdown() => bool;
+  fn send_message(msg: string) => bool;
+  event extension_message(msg: string);
+  
+  // worker can explicitly request to be unloaded. only applies to `no-view` commands which have a predictable termination point.
+  event unload_requested();
+}

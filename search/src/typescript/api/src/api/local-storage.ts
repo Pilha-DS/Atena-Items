@@ -1,0 +1,37 @@
+// Implementation of Raycast's storage API: https://developers.raycast.com/api-reference/storage
+
+import { getClient } from "./client";
+
+/**
+ * @category Local Storage
+ */
+export namespace LocalStorage {
+	export type Value = string | number | boolean;
+	export type Values = { [key: string]: Value };
+
+	export async function getItem<T extends LocalStorage.Value>(
+		key: string,
+	): Promise<T | undefined> {
+		const value = await getClient().Storage.get(key);
+		return value ?? undefined;
+	}
+
+	export async function setItem(
+		key: string,
+		value: LocalStorage.Value,
+	): Promise<void> {
+		await getClient().Storage.set(key, value);
+	}
+
+	export async function removeItem(key: string): Promise<void> {
+		await getClient().Storage.remove(key);
+	}
+
+	export async function allItems(): Promise<LocalStorage.Values> {
+		return getClient().Storage.list();
+	}
+
+	export async function clear(): Promise<void> {
+		await getClient().Storage.clear();
+	}
+}

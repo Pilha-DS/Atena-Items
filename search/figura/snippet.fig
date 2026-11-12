@@ -1,0 +1,76 @@
+// Input server (server) <-> main server (client)
+// The input server monitors keyboard input, detects snippet triggers,
+// and handles keyboard injection (paste, expansion, undo).
+
+enum ExpansionMode {
+  Keydown,
+  Word
+};
+
+struct LayoutInfo {
+  layout: string;
+  rules?: string;
+  model?: string;
+  variant?: string;
+  options?: string;
+};
+
+struct CreateSnippetRequest {
+  trigger: string;
+  mode: ExpansionMode;
+};
+
+struct CreateSnippetResponse {
+  ok: bool;
+};
+
+struct RemoveSnippetRequest {
+  trigger: string;
+};
+
+struct RemoveSnippetResponse {
+  removed: bool;
+};
+
+struct TriggerSnippetPayload {
+  trigger: string;
+};
+
+struct UndoSnippetPayload {
+  trigger: string;
+};
+
+struct InjectExpandRequest {
+  charsToDelete: uint;
+  prePasteDelayUs: uint;
+  terminal: bool;
+  cursorLeftMoves: uint;
+};
+
+struct InjectUndoRequest {
+  backspaceCount: uint;
+  triggerText: string;
+};
+
+struct InjectPasteRequest {
+  terminal: bool;
+};
+
+struct KeyboardCapabilities {
+  injection: bool;
+};
+
+service Snippet {
+  fn setKeymap(info: LayoutInfo) => void;
+  fn createSnippet(req: CreateSnippetRequest) => CreateSnippetResponse;
+  fn removeSnippet(req: RemoveSnippetRequest) => RemoveSnippetResponse;
+  fn resetContext() => void;
+  fn injectExpand(req: InjectExpandRequest) => void;
+  fn injectUndo(req: InjectUndoRequest) => void;
+  fn injectPaste(req: InjectPasteRequest) => void;
+  fn setKeyDelay(delayUs: int) => void;
+  fn getCapabilities() => KeyboardCapabilities;
+
+  event triggerSnippet(payload: TriggerSnippetPayload);
+  event undoSnippet(payload: UndoSnippetPayload);
+}

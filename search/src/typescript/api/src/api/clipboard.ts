@@ -1,0 +1,128 @@
+import type { PathLike } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
+import type { ClipboardContent } from "./proto/api";
+import { getClient } from "./client";
+
+/**
+ * Access system clipboard and clipboard history features.
+ *
+ * @category Clipboard
+ */
+export namespace Clipboard {
+	export type Content =
+		| { text: string }
+		| { file: PathLike }
+		| { urls: Array<string | URL> }
+		| { html: string; text?: string };
+
+	export type ReadContent = {
+		text?: string;
+		file?: string;
+		html?: string;
+		urls?: string[];
+	};
+
+	export type CopyOptions = {
+		concealed?: boolean;
+	};
+
+	export function serializeContent(
+		content: string | number | Clipboard.Content,
+	): ClipboardContent {
+		let ct: ClipboardContent = {};
+
+		if (typeof content !== "object") {
+			ct.text = `${content}`;
+		} else {
+			if (content["file"]) {
+				const file = content["file"];
+				ct.urls = [
+					file instanceof URL ? file.href : pathToFileURL(file.toString()).href,
+				];
+			} else if (content["urls"]) {
+				ct.urls = content["urls"].map((url) => url.toString());
+			} else if (content["html"]) {
+				ct.html = content["html"];
+				ct.text = content["text"];
+			} else {
+				ct.text = content["text"];
+			}
+		}
+
+		return ct;
+	}
+
+	/**
+	 * Copy the provided content in the clipboard.
+	 * The `concealed` option can be passed so that the created clipboard selection
+	 * does not get indexed by the Vicinae clipboard manager.
+	 */
+	export async function copy(
+		text: string | number | Clipboard.Content,
+		options: Clipboard.CopyOptions = {},
+	) {
+		await getClient().Clipboard.copy(serializeContent(text), {
+			concealed: options.concealed ?? false,
+		});
+	}
+
+	/**
+	 * Paste the provided clipboard content to the active window.
+	 * If the environment does not support either getting the active window
+	 * or pasting content to it directly, this will fallback to a regular
+	 * clipboard copy.
+	 */
+	export async function paste(text: string | number | Clipboard.Content) {
+		await getClient().Clipboard.paste(serializeContent(text));
+	}
+
+	/**
+	 * Read the current content of the clipboard, which can contain text, html and a file path.
+	 * Note: the offset option is not yet implemented
+	 *
+	 * ```ts
+	 * const { text, html, file } = await Clipboard.read();
+	 * ```
+	 */
+	export async function read(): Promise<Clipboard.ReadContent> {
+		const content = await getClient().Clipboard.readContent();
+		const fileUrl = content.urls?.find((url) => url.startsWith("file:"));
+		let file: string | undefined;
+
+		if (fileUrl) {
+			try {
+				file = fileURLToPath(fileUrl);
+			} catch {
+				// Ignore malformed file URLs supplied by another application.
+			}
+		}
+
+		return {
+			text: content.text,
+			html: content.html,
+			urls: content.urls,
+			file,
+		};
+	}
+
+	/**
+	 * Read the text representation of the current clipboard data. If the data is not text at all, this
+	 * returns an empty string.
+	 * If you want to read optional html or file path, consider @see {Clipboard.read}
+	 * Note: the offset option is not yet implemented.
+	 *
+	 * ```ts
+	 * const text = await Clipboard.readText();
+	 * ```
+	 */
+	export async function readText(): Promise<string> {
+		return read().then((r) => r.text ?? "");
+	}
+
+	/**
+	 * Clear the current clipboard content.
+	 */
+	export async function clear() {
+		await getClient().Clipboard.clear();
+	}
+}

@@ -1,0 +1,256 @@
+import { Action, ActionPanel, Form, showToast, Toast } from "@vicinae/api";
+import { useState } from "react";
+
+// Examples taken from:
+// https://developers.raycast.com/api-reference/user-interface/form
+
+const useCount = () => {
+	const [count, setCount] = useState(0);
+
+	return {
+		count,
+		increment: () => setCount((count) => count + 1),
+	};
+};
+
+const ManagedSingleFilePicker = () => {
+	const { count, increment } = useCount();
+	const paths = [`/path/to/file/${count}`];
+
+	return (
+		<Form.FilePicker
+			id="managedSingleFile"
+			title="(managed single file)"
+			value={paths}
+			onChange={(paths) => {
+				console.log(`managed form change, not updating`, paths);
+				increment();
+			}}
+		/>
+	);
+};
+
+const ManagedMultipleFilePicker = () => {
+	const { count, increment } = useCount();
+	const paths = [`/path/to/${count}`, `/other/path/to/${count}`];
+
+	return (
+		<Form.FilePicker
+			id="managedSingleFile"
+			title="(managed multiple file)"
+			value={paths}
+			allowMultipleSelection
+			onChange={(paths) => {
+				console.log(`managed form change, not updating`, paths);
+				increment();
+			}}
+		/>
+	);
+};
+
+export default function FormElements() {
+	const [text, setText] = useState("");
+	const [checkbox, setCheckbox] = useState(true);
+
+	return (
+		<Form
+			actions={
+				<ActionPanel>
+					<Action.SubmitForm
+						onSubmit={(values) => {
+							console.log(values);
+							showToast(Toast.Style.Success, "submitted!");
+						}}
+					/>
+				</ActionPanel>
+			}
+			navigationTitle="Form Elements"
+			searchBarAccessory={
+				<Form.LinkAccessory
+					target="https://developers.raycast.com/api-reference/user-interface/form"
+					text="Open Documentation"
+				/>
+			}
+		>
+			{/* TextField */}
+			<Form.TextField
+				id="name"
+				title="TextField"
+				placeholder="Name here..."
+				defaultValue="Steve"
+				value={text}
+				onChange={setText}
+			/>
+
+			{/* PasswordField */}
+			<Form.PasswordField
+				id="password"
+				title="PasswordField"
+				placeholder="Password here..."
+			/>
+
+			{/* TextArea */}
+			<Form.TextArea
+				id="description"
+				title="TextArea"
+				placeholder="Description here..."
+				value={text}
+				onChange={setText}
+			/>
+
+			{/* Checkbox */}
+			<Form.Checkbox
+				id="answer"
+				title="Checkbox"
+				label="Are you happy?"
+				defaultValue={true}
+				value={checkbox}
+				onChange={setCheckbox}
+			/>
+
+			{/* DatePicker */}
+			<Form.DatePicker
+				id="dateOfBirth"
+				title="DatePicker"
+				type={Form.DatePicker.Type.Date}
+				defaultValue={new Date()}
+			/>
+
+			<Form.DatePicker
+				id="datetime"
+				title="DatePicker with time"
+				type={Form.DatePicker.Type.DateTime}
+				defaultValue={new Date()}
+			/>
+
+			{/* Dropdown */}
+			<Form.Dropdown
+				id="emoji"
+				title="Dropdown"
+				defaultValue="lol"
+				onChange={(value) =>
+					showToast(Toast.Style.Success, `Selected ${value}`)
+				}
+			>
+				<Form.Dropdown.Item value="poop" title="Pile of poop" icon="💩" />
+				<Form.Dropdown.Item value="rocket" title="Rocket" icon="🚀" />
+				<Form.Dropdown.Item
+					value="lol"
+					title="Rolling on the floor laughing face"
+					icon="🤣"
+				/>
+			</Form.Dropdown>
+
+			<Form.Dropdown
+				id="emoji"
+				title="Dropdown"
+				placeholder="No default value"
+				onChange={(value) =>
+					showToast(Toast.Style.Success, `Selected ${value}`)
+				}
+			>
+				<Form.Dropdown.Item value="poop" title="Pile of poop" icon="💩" />
+				<Form.Dropdown.Item value="rocket" title="Rocket" icon="🚀" />
+				<Form.Dropdown.Item
+					value="lol"
+					title="Rolling on the floor laughing face"
+					icon="🤣"
+				/>
+			</Form.Dropdown>
+
+			{/* Dropdown with sections */}
+			<Form.Dropdown id="food" title="Dropdown with sections">
+				<Form.Dropdown.Section title="Fruits">
+					<Form.Dropdown.Item value="apple" title="Apple" icon="🍎" />
+					<Form.Dropdown.Item value="banana" title="Banana" icon="🍌" />
+				</Form.Dropdown.Section>
+				<Form.Dropdown.Section title="Vegetables">
+					<Form.Dropdown.Item value="broccoli" title="Broccoli" icon="🥦" />
+					<Form.Dropdown.Item value="carrot" title="Carrot" icon="🥕" />
+				</Form.Dropdown.Section>
+			</Form.Dropdown>
+
+			{/* TagPicker */}
+			<Form.TagPicker id="sports" title="TagPicker" defaultValue={["football"]}>
+				<Form.TagPicker.Item value="basketball" title="Basketball" icon="🏀" />
+				<Form.TagPicker.Item value="football" title="Football" icon="⚽️" />
+				<Form.TagPicker.Item value="tennis" title="Tennis" icon="🎾" />
+			</Form.TagPicker>
+
+			{/* Separator */}
+			<Form.Separator />
+
+			{/* FilePicker - Single File */}
+			<Form.FilePicker
+				id="singleFile"
+				title="(single file)"
+				onChange={(files) =>
+					showToast(Toast.Style.Success, `Selected ${files.length} file(s)`)
+				}
+			/>
+
+			{/* FilePicker - Multiple Files */}
+			<Form.FilePicker
+				id="multipleFiles"
+				title="(multiple files)"
+				allowMultipleSelection={true}
+				onChange={(files) =>
+					showToast(Toast.Style.Success, `Selected ${files.length} file(s)`)
+				}
+			/>
+
+			{/* FilePicker - Single Directory */}
+			<Form.FilePicker
+				id="singleDirectory"
+				title="(single directory)"
+				canChooseDirectories={true}
+				canChooseFiles={false}
+				onChange={(files) =>
+					showToast(
+						Toast.Style.Success,
+						`Selected ${files.length} directory(ies)`,
+					)
+				}
+			/>
+
+			<ManagedSingleFilePicker />
+			<ManagedMultipleFilePicker />
+
+			{/* FilePicker - Multiple Directories */}
+			{/* Qt doesn't support multi-directory picking */}
+			{/* <Form.FilePicker
+				id="multipleDirectories"
+				title="FilePicker (multiple directories)"
+				allowMultipleSelection={true}
+				canChooseDirectories={true}
+				canChooseFiles={false}
+				onChange={(files) =>
+					showToast(
+						Toast.Style.Success,
+						`Selected ${files.length} directory(ies)`,
+					)
+				}
+			/> */}
+
+			{/* FilePicker - With Hidden Files */}
+			{/* TODO: filtering isn't implemented yet */}
+			{/* <Form.FilePicker
+				id="filesWithHidden"
+				title="(with hidden files)"
+				showHiddenFiles={true}
+				onChange={(files) =>
+					showToast(
+						Toast.Style.Success,
+						`Selected ${files.length} file(s)`,
+					)
+				}
+			/> */}
+
+			{/* Description */}
+			<Form.Description
+				title="Description"
+				text="This is a description. Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua."
+			/>
+		</Form>
+	);
+}

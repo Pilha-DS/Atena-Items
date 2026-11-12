@@ -1,0 +1,177 @@
+#pragma once
+#include <common/common.hpp>
+#include <common/enumerate.hpp>
+#include <expected>
+#include <format>
+#include <functional>
+#include <optional>
+#include <string>
+#include <string_view>
+#include "local-socket.hpp"
+#include "generated/ipc-client.hpp"
+
+namespace cli {
+
+constexpr bool isUnreservedUriChar(unsigned char c) {
+  return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-' || c == '_' ||
+         c == '.' || c == '~';
+}
+
+inline std::string percentEncodeUriComponent(std::string_view value) {
+  std::string encoded;
+  encoded.reserve(value.size());
+  for (unsigned char c : value) {
+    if (isUnreservedUriChar(c)) {
+      encoded.push_back(c);
+    } else {
+      encoded.append(std::format("%{:02X}", c));
+    }
+  }
+  return encoded;
+}
+
+class IpcClient {
+public:
+  static std::expected<IpcClient, std::string> connect() {
+    return LocalSocket::connect(vicinae::serverSocketName()).transform([](LocalSocket sock) {
+      return IpcClient(std::move(sock));
+    });
+  }
+
+  ~IpcClient() = default;
+
+  IpcClient(IpcClient &&other) noexcept
+      : m_sock(std::move(other.m_sock)), m_transport(m_sock), m_rpc(m_transport), m_client(m_rpc) {}
+
+  IpcClient(const IpcClient &) = delete;
+  IpcClient &operator=(const IpcClient &) = delete;
+  IpcClient &operator=(IpcClient &&) = delete;
+
+  std::expected<ipc::PingResponse, std::string> ping() {
+    return call<ipc::PingResponse>([&](auto cb) { m_client.ipc().ping(std::move(cb)); });
+  }
+
+  std::expected<ipc::DeeplinkResponse, std::string> deeplink(ipc::DeeplinkRequest req) {
+    return call<ipc::DeeplinkResponse>([&](auto cb) { m_client.ipc().deeplink(req, std::move(cb)); });
+  }
+
+  static std::expected<ipc::DeeplinkResponse, std::string>
+  sendDeeplink(std::string_view url, const std::vector<std::pair<std::string, std::string>> &query = {}) {
+    std::string fullUrl{url};
+    for (const auto &[idx, arg] : query | vicinae::enumerate) {
+      fullUrl.append(std::format("{}{}={}", idx == 0 ? "?" : "&", percentEncodeUriComponent(arg.first),
+                                 percentEncodeUriComponent(arg.second)));
+    }
+    return connect().and_then([&](IpcClient client) { return client.deeplink({.url = std::move(fullUrl)}); });
+  }
+
+  std::expected<ipc::DescribeResponse, std::string> describe() {
+    return call<ipc::DescribeResponse>([&](auto cb) { m_client.ipc().describe(std::move(cb)); });
+  }
+
+  std::expected<ipc::LaunchAppResponse, std::string> launchApp(ipc::LaunchAppRequest req) {
+    return call<ipc::LaunchAppResponse>([&](auto cb) { m_client.ipc().launchApp(req, std::move(cb)); });
+  }
+
+  std::expected<ipc::ListCommandsResponse, std::string> listCommands() {
+    return call<ipc::ListCommandsResponse>([&](auto cb) { m_client.ipc().listCommands(std::move(cb)); });
+  }
+
+  std::expected<ipc::LaunchCommandResponse, std::string> launchCommand(ipc::LaunchCommandRequest req) {
+    return call<ipc::LaunchCommandResponse>(
+        [&](auto cb) { m_client.ipc().launchCommand(req, std::move(cb)); });
+  }
+
+  std::expected<std::vector<ipc::FileResult>, std::string> fsQuery(std::string_view query, int limit = 100,
+                                                                   std::optional<std::string> category = {}) {
+    ipc::FsQueryParams params{
+        .limit = limit,
+        .category = std::move(category),
+    };
+
+    return call<std::vector<ipc::FileResult>>(
+        [&](auto cb) { m_client.ipc().fsQuery(std::string{query}, params, std::move(cb)); });
+  }
+
+  std::expected<ipc::DMenuResponse, std::string> dmenu(ipc::DMenuRequest req) {
+    return call<ipc::DMenuResponse>([&](auto cb) { m_client.ipc().dmenu(req, std::move(cb)); });
+  }
+
+  std::expected<ipc::AiListModelsResponse, std::string> aiListModels() {
+    return call<ipc::AiListModelsResponse>([&](auto cb) { m_client.ipc().aiListModels(std::move(cb)); });
+  }
+
+  std::expected<ipc::AiAskResponse, std::string> aiAsk(ipc::AiAskRequest req) {
+    return call<ipc::AiAskResponse>([&](auto cb) { m_client.ipc().aiAsk(req, std::move(cb)); });
+  }
+
+  // Blocks until the completion ends, handing every chunk to onData as it arrives
+  std::expected<void, std::string> streamCompletion(const std::string &completionId,
+                                                    const std::function<void(std::string_view)> &onData) {
+    bool done = false;
+    std::optional<std::string> failure;
+
+    m_client.ipc().onAidata([&](const std::string &id, const std::string &data, const bool &isDone) {
+      if (id != completionId) return;
+      if (!data.empty()) onData(data);
+      if (isDone) done = true;
+    });
+    m_client.ipc().onAifailed([&](const std::string &id, const std::string &error) {
+      if (id != completionId) return;
+      failure = error;
+      done = true;
+    });
+
+    while (!done) {
+      auto data = recv();
+      if (!data) return std::unexpected("Connection to the server was lost");
+      if (auto res = m_client.route(*data); !res) return std::unexpected(res.error());
+    }
+
+    if (failure) return std::unexpected(*failure);
+    return {};
+  }
+
+private:
+  IpcClient(LocalSocket sock)
+      : m_sock(std::move(sock)), m_transport(m_sock), m_rpc(m_transport), m_client(m_rpc) {}
+
+  struct SocketTransport : public ipc::AbstractTransport {
+    LocalSocket &sock;
+    explicit SocketTransport(LocalSocket &sock) : sock(sock) {}
+    void send(std::string_view data) override {
+      uint32_t size = data.size();
+      sock.writeAll(&size, sizeof(size));
+      sock.writeAll(data.data(), data.size());
+    }
+  };
+
+  std::expected<std::string, std::string> recv() {
+    uint32_t size;
+    if (!m_sock.readAll(&size, sizeof(size))) return std::unexpected("Failed to read response size");
+
+    std::string buf(size, '\0');
+    if (!m_sock.readAll(buf.data(), size)) return std::unexpected("Failed to read response data");
+    return buf;
+  }
+
+  template <typename T>
+  std::expected<T, std::string>
+  call(std::function<void(std::function<void(std::expected<T, std::string>)>)> fn) {
+    std::expected<T, std::string> result = std::unexpected(std::string{"no response"});
+    fn([&result](std::expected<T, std::string> res) { result = std::move(res); });
+
+    auto data = recv();
+    if (!data) return std::unexpected(data.error());
+    if (auto res = m_client.route(*data); !res) return std::unexpected(res.error());
+
+    return result;
+  }
+
+  LocalSocket m_sock;
+  SocketTransport m_transport;
+  ipc::RpcTransport m_rpc;
+  ipc::Client m_client;
+};
+
+} // namespace cli
