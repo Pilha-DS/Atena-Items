@@ -21,7 +21,7 @@ notes/
 ├── Android/                # app Android (Gradle próprio)
 └── linux/                  # port desktop + widget Plasma 6 (Gradle próprio)
 server/                     # Atena Hub (Gradle próprio + Docker)
-search/                     # clone separado do Vicinae (build CMake/Ninja)
+search/                     # fork do Vicinae, build CMake/Ninja
 LICENSE                     # GNU GPL v3.0
 ```
 
@@ -56,7 +56,30 @@ cd search && make release
 Cada pasta tem um README com os detalhes: [`notes/`](notes), [`server/`](server),
 [`search/`](search), [`agendas/`](agendas).
 
-## Licença
+## 🧭 Padrões de desenvolvimento
+
+As convenções vivem em [`.cursor/rules/`](.cursor/rules) — valem para qualquer
+agente de IA e servem de guia para humanos:
+
+| Rule | Vale para |
+| --- | --- |
+| `project-structure` | sempre — layout do monorepo, fronteiras e comandos de build |
+| `git-commits` | sempre — Conventional Commits, escopos e o que não commitar |
+| `kotlin-style` | `notes/**`, `server/**` — imutabilidade, erros, corrotinas |
+| `compose-ui` | `notes/**/ui/` — estado, i18n, tema e acessibilidade |
+| `hub-server` | `server/` — auth, acesso ao banco, compatibilidade do sync |
+| `gradle-deps` | builds — versões só no catálogo, bump isolado |
+| `shell-scripts` | `*.sh` — `set -euo pipefail`, instalação em `~/.local`, uninstall |
+| `kde-integration` | QML/plasmoid — Plasma 6, `qmllint`, `kpackagetool6` |
+| `docs-writing` | `*.md` — README em pt-BR, tabelas de config e API |
+| `search-upstream` | `search/` — fork do Vicinae, `AGENTS.md` vence |
+
+O [`.editorconfig`](.editorconfig) fixa o básico de formatação (UTF-8, LF, 4
+espaços em Kotlin/QML, 2 em JSON/YAML).
+
+---
+
+## 📄 Licença
 
 Distribuído sob a **GNU General Public License v3.0** — veja [LICENSE](LICENSE).
 

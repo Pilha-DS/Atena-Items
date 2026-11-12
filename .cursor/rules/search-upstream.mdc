@@ -1,0 +1,46 @@
+---
+description: Como mexer no search/ (fork do Vicinae) e como puxar atualizações do upstream
+globs: search/**
+---
+
+# search/ — fork do Vicinae
+
+`search/` é um **fork** do [Vicinae](https://github.com/vicinaehq/vicinae)
+versionado junto com o monorepo. Não tem `.git` próprio: o histórico é o nosso.
+
+- **Base atual:** upstream `v0.30.0-8-g479026e39` (tag `v0.30.0` + 8 commits).
+- **`search/AGENTS.md` vence qualquer regra daqui** quando o assunto é estilo de
+  C++/Qt. Leia antes de editar código do upstream.
+- Licença GPL-3.0 do upstream vale para tudo em `search/`.
+
+## O que evitar
+
+- Não reorganize, renomeie nem reformate código do upstream "de graça": o diff
+  contra o upstream precisa continuar pequeno e legível.
+- Não edite código vendorizado (`vendor/`, `src/lib/glyph/`) para resolver bug
+  nosso — se for inevitável, comente o porquê no commit.
+- Não commite `build/`, `.cache/`, `dist/`, `*.AppImage` (o `.gitignore` do
+  upstream dentro de `search/` já cobre). `search/.github/workflows/` fica fora
+  do repo de propósito — é CI de release do upstream e não é usado por nós.
+
+## Build e teste
+
+| Comando | Para quê |
+| --- | --- |
+| `make release` | build otimizado |
+| `make dev` | configure + build + run |
+| `make test` | testes |
+| `make qmllint` | lint de QML |
+| `make install` | instala em `~/.local` |
+
+Dependências: Qt 6, CMake, Ninja, C++23. Se o build quebrar por ambiente, a
+saída rápida é usar o binário oficial do upstream em vez de compilar.
+
+## Puxar atualização do upstream
+
+1. Clone o upstream fora do repo: `git clone https://github.com/vicinaehq/vicinae /tmp/vicinae`.
+2. Confira o diff: `diff -rq --exclude=.git --exclude=build /tmp/vicinae search`.
+3. Copie só o que o upstream mudou, preservando nossas alterações locais.
+4. Rode `make test` (ou ao menos configure + build) antes de commitar.
+5. Um commit só para a sincronização: `chore(search): sincroniza com o upstream vX.Y.Z`,
+   com a tag de origem no corpo.

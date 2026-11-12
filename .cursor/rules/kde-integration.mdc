@@ -1,0 +1,25 @@
+---
+description: Integração KDE Plasma 6 (plasmoid, KWin script, IPC com o app)
+globs: **/*.qml,notes/linux/kde/**
+alwaysApply: false
+---
+
+# KDE Plasma 6
+
+- Só API de Plasma 6: `PlasmoidItem` de `org.kde.plasma.plasmoid` e
+  `Kirigami.Icon` — `PlasmaCore.IconItem` não existe mais.
+- **QML é apresentação.** Lógica pesada, HTTP e parsing ficam no app (JVM). O
+  plasmoid só abre/recolhe e mostra estado.
+- O plasmoid não fala com o JVM: use o helper `scripts/*-toggle` (arquivo de
+  toggle em `$XDG_RUNTIME_DIR`) e `anchor X Y W H` para posicionar a janela
+  abaixo do ícone. Não invente D-Bus que o app não publica.
+- Ícone empacotado em `contents/icons/`, referenciado com
+  `Qt.resolvedUrl("../icons/x.png")` — não dependa do tema de ícones.
+- `qmllint` (Qt 6) precisa passar antes de instalar; erro de QML aparece no
+  painel apenas como "error loading".
+- Instale com `kpackagetool6 --type Plasma/Applet --upgrade <dir>` (ou
+  `--install`). **`cp` manual deixa o widget invisível em "Adicionar widgets"**
+  até reiniciar o shell. O `uninstall` usa `--remove`.
+- KWin script: acesse propriedades dentro de `try/catch` (variam por versão),
+  case janelas por caption/classe do app, e registre em
+  `~/.config/kwinrc` (`Plugins/<id>Enabled=true`).

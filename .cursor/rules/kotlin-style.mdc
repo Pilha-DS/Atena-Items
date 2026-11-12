@@ -1,0 +1,48 @@
+---
+description: Convenções de Kotlin (estilo, imutabilidade, erros, corrotinas)
+globs: notes/**/*.kt,server/**/*.kt
+alwaysApply: false
+---
+
+# Kotlin
+
+- Estilo oficial do Kotlin (`kotlin.code.style=official`): 4 espaços, sem imports
+  com `*`, vírgula final em argumentos multilinha. Sem reformatar arquivos
+  inteiros em um commit de feature.
+- Todo arquivo novo começa com o cabeçalho GPL do projeto:
+
+```kotlin
+/*
+ * Copyright (c) 2026 Open Apps Labs
+ *
+ * This file is part of <Jotter|Atena Hub>
+ * ... (texto completo já usado nos arquivos vizinhos)
+ */
+```
+
+- Packages: `com.openappslabs.<projeto>`. Em `notes/`, **mantenha**
+  `com.openappslabs.jotter` — é o fork e renomear quebra o upstream.
+- `val` sempre que possível; `var` só com estado local mutável. Estado de UI e
+  DTOs são `data class` imutáveis; estados com variantes usam `sealed interface`.
+- **Nunca `!!`.** Use `?: return`, `requireNotNull(x) { "motivo" }` ou trate o
+  nulo. Também evite `lateinit` fora de DI/inicialização de framework.
+- Erros: exceção só na borda (rede, disco). Capture com `runCatching` no
+  controller/repositório e transforme em estado de UI (`error: String?`), nunca
+  deixe propagar para uma recomposição.
+- Corrotinas: `Dispatchers.IO` para disco/rede, escopo estruturado
+  (`rememberCoroutineScope`, `viewModelScope`), nada de `GlobalScope` ou
+  `Thread.sleep`. Trabalho cancelável deve checar `isActive`.
+- Nomes em inglês para código (classes, funções, variáveis). Texto para o
+  usuário em **pt-BR**, via camada de i18n — nunca espalhado em `data`.
+- KDoc curto em APIs públicas; comentários explicam o "porquê", nunca o óbvio.
+  Código morto e `TODO` sem dono não entram.
+
+```kotlin
+// ❌ ruído e risco
+val note = repository.find(id)!!
+if (note.title == "") { … }
+
+// ✅
+val note = repository.find(id) ?: return
+if (note.title.isBlank()) { … }
+```

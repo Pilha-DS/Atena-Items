@@ -1,0 +1,26 @@
+---
+description: Dependências e versões via version catalog; regras de build Gradle
+globs: **/*.gradle.kts,**/libs.versions.toml,**/gradle.properties
+alwaysApply: false
+---
+
+# Build e dependências
+
+- **Versão só no catálogo** (`gradle/libs.versions.toml`). No build use
+  `implementation(libs.nome)`; nada de `"grupo:artefato:1.2.3"` no `.kts`.
+- Cada projeto (`notes/Android`, `notes/linux`, `server`) tem catálogo e wrapper
+  próprios. Não copie uma versão de um projeto para outro "para alinhar" sem
+  testar o build.
+- **Nova dependência é decisão**, não reflexo: prefira o que já está no catálogo
+  ou na stdlib. Se adicionar, explique no corpo do commit por que a lib é
+  necessária e qual o custo (tamanho, licença GPL-compatível).
+- **Bump de Kotlin/AGP/Compose/Compose Desktop** vai em commit isolado, com o
+  build e (quando houver) os testes rodando antes. Nunca misture com feature.
+- Toolchain: JDK 21 em `notes/linux` e `server`; JDK 17+ no Android
+  (`compileSdk 36`). Não baixe `minSdk`/`targetSdk` sem motivo escrito.
+- `kotlin.code.style=official` é obrigatório em todos os `gradle.properties`.
+- Não commite `local.properties`, keystore, `build/`, `.gradle/`.
+- `api` vs `implementation`: use `implementation`; `api` só quando o tipo aparece
+  na assinatura pública de um módulo de biblioteca.
+- Android: versões de assinatura vêm de `local.properties` — nunca hardcode
+  senha no `build.gradle.kts`.

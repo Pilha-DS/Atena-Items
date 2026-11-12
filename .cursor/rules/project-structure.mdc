@@ -1,0 +1,46 @@
+---
+description: Layout do monorepo, fronteiras entre projetos e comandos de build
+alwaysApply: true
+---
+
+# Estrutura do monorepo
+
+```
+agendas/        projeto próprio (ainda vazio)
+notes/Android/  app Android (Gradle próprio)
+notes/linux/    port desktop + widget Plasma 6 (Gradle próprio)
+server/         Atena Hub (Gradle próprio + Docker)
+search/         Vicinae, fork do upstream versionado junto (CMake/Ninja)
+```
+
+## Regras
+
+- **Cada pasta é um projeto independente.** Nunca crie dependência de build entre
+  elas (`project(":notes")`, `includeBuild`, módulo compartilhado). Projetos se
+  conversam por HTTP, e o ponto de encontro é o `server/`.
+- **Rode o Gradle de dentro do projeto.** `cd server && ./gradlew …`; não existe
+  wrapper na raiz. O mesmo vale para `search/`: `cd search && make …`.
+- **`search/` é código de terceiro versionado aqui.** Não mova nem reestruture a
+  pasta, não reformate nem "limpe" código do upstream: mudanças nossas ficam
+  concentradas e pequenas, para o diff contra o upstream continuar legível.
+  Commits lá usam o escopo `search`.
+- **Projeto novo** = uma pasta na raiz com `README.md`, build próprio e a licença
+  referenciada. Atualize a tabela do `README.md` da raiz.
+- **Nunca versione segredos:** `local.properties`, `*.jks`, `*.keystore`, `.env`,
+  bancos `*.db`. Todos já estão no `.gitignore`; não contorne com `-f`.
+- **Artefatos de build** (`build/`, `.gradle/`, `node_modules/`) nunca são
+  commitados.
+
+## Comandos canônicos
+
+| Onde | Comando |
+| --- | --- |
+| `notes/Android` | `./gradlew :app:assembleDebug` · `:app:testDebugUnitTest` |
+| `notes/linux` | `./gradlew :app:run` · `:app:createDistributable` · `build` |
+| `server` | `./gradlew run` · `test` · `docker compose up -d --build` |
+| `search` | `make release` · `make test` · `make qmllint` |
+
+## Antes de dizer "pronto"
+
+Compile o projeto que você mexeu. Se o cambio cruza projetos (ex.: endpoint novo
+no hub + cliente), verifique os dois lados.

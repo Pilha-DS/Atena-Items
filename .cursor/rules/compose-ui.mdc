@@ -1,0 +1,37 @@
+---
+description: Regras para Compose (Android e desktop): estado, textos, tema e acessibilidade
+globs: notes/**/ui/**/*.kt,notes/**/navigation/**/*.kt
+alwaysApply: false
+---
+
+# Compose
+
+- **Composable é apresentação.** Carregar dados, validar e persistir fica no
+  controller/repositório; o `@Composable` recebe `state` + callbacks.
+- Estado sobe (`hoisting`): `@Composable fun Tela(state: X, onAction: (A) -> Unit)`.
+  Nada de `remember { Repositorio() }` dentro da tela.
+- Efeitos colaterais só em `LaunchedEffect(chave)`; `derivedStateOf` quando o
+  cálculo é caro. Não mutar estado durante a composição.
+- `remember` sempre com as chaves certas — chave faltando é bug silencioso
+  (ex.: `remember(settings) { … }`).
+- **Textos:** em `notes/` passe pela camada de i18n (`AppStrings` no desktop,
+  `strings.xml`/`stringResource` no Android). Zero literais em pt-BR dentro de
+  `ui/`.
+- **Cores:** só de `MaterialTheme.colorScheme`. `Color(0xFF…)` apenas para
+  semântica fixa (ex.: indicador online/offline), nunca para fundo/texto.
+- Ícones: `IconButton` com `contentDescription` significativo; decorativos usam
+  `null`. Alvos de clique ≥ 40 dp. Foco visível por teclado no desktop.
+- Componentes: siga o padrão de `ui/components/`, `ui/screens/` e `ui/theme/`.
+  Não crie variante nova quando o `MaterialTheme.typography/shapes` resolve.
+- Telas novas ganham `@Preview` (Android) ou um alvo de execução documentado
+  (desktop). Mudança visual: verifique claro **e** escuro.
+- APIs do Compose Desktop mudam entre versões: se um parâmetro não existir,
+  consulte a assinatura na versão do catálogo em vez de tentar por tentativa.
+
+## Desktop (janela/widget)
+
+- Janela sem moldura: o arrasto fica restrito ao cabeçalho — não engula cliques
+  de `IconButton` com `pointerInput`.
+- `Esc` fecha o overlay mais interno primeiro; só depois a janela.
+- Lembre da geometria (`window.properties`) e mantenha a janela dentro da tela ao
+  restaurar.

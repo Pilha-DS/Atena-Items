@@ -1,0 +1,23 @@
+---
+description: Idioma e formato da documentação (READMEs, comentários, tabelas)
+globs: **/*.md
+alwaysApply: false
+---
+
+# Documentação
+
+- **README em português do Brasil.** Código, identificadores, nomes de arquivo e
+  comentários de código em inglês.
+- Cada projeto tem `README.md` próprio com, nesta ordem: o que é, requisitos,
+  rodar/buildar, instalar, configuração, estrutura, problemas comuns, licença.
+- Comandos copiáveis, relativos à pasta do projeto (`cd notes/linux`, não caminho
+  absoluto com seu usuário). Um comando por bloco, comentado quando não é óbvio.
+- Configuração e variáveis de ambiente em **tabela** (nome, padrão, para que
+  serve). Segredos sempre como placeholder (`ATENA_TOKEN=seu-token`), nunca um
+  valor real.
+- Tabelas de API/rotas e de variáveis precisam refletir o código: rota nova ou
+  variável removida atualiza o README no mesmo commit.
+- Não documente o que não existe mais — apague seções obsoletas em vez de
+  deixá-las "por histórico" (o histórico é o git).
+- Sem marketing: diga o que faz, o que precisa e o que pode dar errado.
+- Exemplos de código com a linguagem marcada (` ```bash `, ` ```kotlin `).

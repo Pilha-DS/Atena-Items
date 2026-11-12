@@ -1,0 +1,33 @@
+---
+description: Mensagens de commit e organização das mudanças
+alwaysApply: true
+---
+
+# Commits
+
+Formato: `tipo(escopo): assunto`
+
+- **tipos:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `build`, `chore`
+- **escopos:** `android`, `linux`, `hub`, `search`, `repo`, `docs`
+  (escopo opcional quando a mudança é realmente global)
+- **assunto em português**, imperativo, minúsculo, ≤ 72 caracteres, sem ponto
+  final. Descreva o efeito, não o arquivo.
+
+```
+feat(hub): endpoint de leitura das notas por ferramenta
+fix(linux): nota geral não perde mais o texto ao fechar e reabrir
+docs: como regerar o icone no linux
+```
+
+## Regras
+
+- **Um assunto por commit.** Movimentação de arquivos/renomeação vai separada de
+  mudança de comportamento — assim o `git log --follow` e o blame continuam
+  úteis.
+- Corpo (opcional) diz **por que**, não "o que"; quebre em 72 colunas.
+- Mudança que quebra contrato (API do hub, config, widget) escreve isso no corpo.
+- Não commite `build/`, `.gradle/`, `local.properties`, `*.jks`, `.env`, `*.db`
+  nem artefatos do `search/` (`build/`, `.cache/`, `dist/`, `*.AppImage`).
+- Antes de commitar código: o projeto compila (`./gradlew compileKotlin`,
+  `make`, `qmllint`, conforme o caso).
+- Não misture bump de dependência com feature no mesmo commit.

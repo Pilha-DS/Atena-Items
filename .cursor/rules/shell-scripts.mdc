@@ -1,0 +1,34 @@
+---
+description: Scripts de instalação e helpers em bash (instalação no ~/.local)
+globs: **/*.sh,notes/linux/scripts/*,server/docs/*.sh
+alwaysApply: false
+---
+
+# Scripts em bash
+
+- Cabeçalho `#!/usr/bin/env bash` e `set -euo pipefail` na primeira linha útil.
+- Variáveis sempre entre aspas (`"$dir"`), `[[ … ]]` em vez de `[ … ]`, `local`
+  dentro de funções, `$(…)` em vez de crases.
+- **Nada de root.** Instaladores escrevem em `~/.local`, `~/.config` e
+  `~/.local/share`, respeitando `XDG_*` quando definidas.
+- Todo instalador tem contrapartida: `./scripts/install.sh uninstall` remove o
+  que foi instalado e **preserva** dados do usuário (config, histórico). Apagar
+  dado só com flag explícita.
+- Idempotente: rodar duas vezes não duplica entrada em `.desktop`, `.bashrc` ou
+  cache de ícone.
+- Cheque ferramenta opcional antes de usar (`command -v rsvg-convert`) e tenha
+  fallback; falhar com mensagem clara e código ≠ 0 quando for requisito.
+- `mktemp`/`trap` para arquivos temporários; nunca escreva no diretório do
+  projeto durante a instalação.
+- Nunca ecoe token, senha ou chave (nem em `echo`, nem em `set -x`).
+- Antes de encerrar: `bash -n script.sh` (e `shellcheck` se existir).
+
+```bash
+# ❌
+cp arquivo $HOME/.local/bin   # sem quotes, sem mkdir
+rm -rf $DIR/*                 # apaga demais
+
+# ✅
+mkdir -p "$HOME/.local/bin"
+install -m 755 "$PROJECT_DIR/scripts/helper" "$HOME/.local/bin/helper"
+```

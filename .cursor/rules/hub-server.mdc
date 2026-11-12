@@ -1,0 +1,46 @@
+---
+description: Convenções do Atena Hub (Ktor, SQLite, compatibilidade com os apps)
+globs: server/**/*.kt,server/**/*.yml,server/Dockerfile
+alwaysApply: false
+---
+
+# Atena Hub
+
+## Rotas
+
+- Toda rota `/api/*` começa com `if (!call.requireToken(database)) return`.
+  `/health` é a única sem auth.
+- Rotas novas entram sob `/api/v1`; se for de outra ferramenta, no formato
+  `/api/v1/tools/<tool>/…` e registre o `ToolInfo` em `Tools.kt`.
+- Responda com os DTOs de `Models.kt` (`@Serializable`, com valores default para
+  tolerar clientes antigos). Erro sempre como `ErrorResponse` com 4xx/5xx — nunca
+  stack trace nem mensagem de SQL.
+- Endpoint novo = linha na tabela de API do `server/README.md` + caso no
+  `server/docs/e2e.sh` quando envolver auth ou sync.
+
+## Banco
+
+- Acesso só por `database.read { }` / `database.write { }`. Nunca guarde um
+  `Connection` fora do bloco e nunca escreva fora de `write` (que segura o lock).
+- SQL sempre parametrizado com os helpers `execute/query/queryList`; jamais
+  concatene valor vindo do cliente.
+- Schema: mudanças aditivas (`CREATE TABLE IF NOT EXISTS`, `ALTER TABLE` guardado
+  pela versão em `meta`). Nunca `DROP`, nunca apagar dado de usuário.
+- `PRAGMA journal_mode=WAL` e `busy_timeout` já são aplicados; não duplique.
+
+## Compatibilidade (o mais importante)
+
+- `/api/v1/sync` é contrato público: apps Jotter já instalados dependem do
+  payload atual. Campo novo é opcional com default; campo existente não muda de
+  nome, tipo nem significado.
+- Continue aceitando `JOTTER_*` (env) e reaproveitando `jotter-server.db`. Não
+  renomeie o volume Docker nem o arquivo por conveniência.
+- Nota criptografada nunca expõe `content`: o hub não tem a senha.
+
+## Operação
+
+- Log com slf4j, sem token, sem conteúdo de nota, sem IP em excesso.
+- O token aparece no boot de propósito (é o único canal do container), mas não
+  deve aparecer em request log nem em erro.
+- Docker: usuário não-root, `-Xmx` do `gradle.properties`, healthcheck em
+  `/health`, volume nomeado.
