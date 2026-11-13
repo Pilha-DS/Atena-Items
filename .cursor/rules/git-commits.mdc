@@ -8,7 +8,7 @@ alwaysApply: true
 Formato: `tipo(escopo): assunto`
 
 - **tipos:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `build`, `chore`
-- **escopos:** `android`, `linux`, `hub`, `search`, `repo`, `docs`
+- **escopos:** `agenda`, `android`, `linux`, `hub`, `search`, `repo`, `docs`
   (escopo opcional quando a mudança é realmente global)
 - **assunto em português**, imperativo, minúsculo, ≤ 72 caracteres, sem ponto
   final. Descreva o efeito, não o arquivo.

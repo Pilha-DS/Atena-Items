@@ -6,7 +6,7 @@ alwaysApply: true
 # Estrutura do monorepo
 
 ```
-agendas/        projeto próprio (ainda vazio)
+agenda/         Fossify Calendar, fork do upstream versionado junto (Gradle próprio)
 notes/Android/  app Android (Gradle próprio)
 notes/linux/    port desktop + widget Plasma 6 (Gradle próprio)
 server/         Atena Hub (Gradle próprio + Docker)
@@ -20,10 +20,12 @@ search/         Vicinae, fork do upstream versionado junto (CMake/Ninja)
   conversam por HTTP, e o ponto de encontro é o `server/`.
 - **Rode o Gradle de dentro do projeto.** `cd server && ./gradlew …`; não existe
   wrapper na raiz. O mesmo vale para `search/`: `cd search && make …`.
-- **`search/` é código de terceiro versionado aqui.** Não mova nem reestruture a
-  pasta, não reformate nem "limpe" código do upstream: mudanças nossas ficam
-  concentradas e pequenas, para o diff contra o upstream continuar legível.
-  Commits lá usam o escopo `search`.
+- **`search/` e `agenda/` são código de terceiro versionado aqui.** Não mova nem
+  reestruture as pastas, não reformate nem "limpe" código do upstream: mudanças
+  nossas ficam concentradas e pequenas, para o diff contra o upstream continuar
+  legível. Commits lá usam o escopo `search` e `agenda`. O `.git` de cada fork
+  não existe dentro do monorepo: o histórico é o daqui, e os arquivos de CI do
+  upstream ficam no `.gitignore` da raiz.
 - **Projeto novo** = uma pasta na raiz com `README.md`, build próprio e a licença
   referenciada. Atualize a tabela do `README.md` da raiz.
 - **Nunca versione segredos:** `local.properties`, `*.jks`, `*.keystore`, `.env`,
@@ -35,6 +37,7 @@ search/         Vicinae, fork do upstream versionado junto (CMake/Ninja)
 
 | Onde | Comando |
 | --- | --- |
+| `agenda` | `./gradlew :app:assembleDebug` · `:app:testDebugUnitTest` |
 | `notes/Android` | `./gradlew :app:assembleDebug` · `:app:testDebugUnitTest` |
 | `notes/linux` | `./gradlew :app:run` · `:app:createDistributable` · `build` |
 | `server` | `./gradlew run` · `test` · `docker compose up -d --build` |

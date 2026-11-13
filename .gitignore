@@ -35,3 +35,14 @@ jotter-server.zip
 # O CI do upstream (releases, AppImage, nix) dispararia a cada push nosso e não
 # é usado por nós: os arquivos ficam no disco, mas não entram no repo.
 search/.github/workflows/
+
+# ---- Agenda: fork do Fossify Calendar versionado aqui ----
+# Mesma regra do search/: o código do upstream fica intacto no disco, mas o CI
+# dele (release, fastlane, dependabot) não roda por nós. O estado de release e
+# os relatórios do fastlane são gerados localmente.
+agenda/.github/workflows/
+agenda/.github/dependabot.yml
+agenda/.fossify/
+agenda/fastlane/report.xml
+agenda/fastlane/fastlane.json
+agenda/keystore.properties
