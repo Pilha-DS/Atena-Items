@@ -21,6 +21,7 @@
 #include "utils/environment.hpp"
 #include "vicinae.hpp"
 #include "services/ai/tool-registry.hpp"
+#include "builtins/web/web-tools.hpp"
 #include "ui/image/url.hpp"
 #include "view-utils.hpp"
 
@@ -279,6 +280,7 @@ void ChatSession::sendQuery(const std::string &query) {
   auto tools = modelSupports(AI::Capability::ToolCalling) ? m_services.tools()->enabledToolNames()
                                                           : std::vector<std::string>{};
   m_turn->options = {.model = m_selectedModel, .tools = std::move(tools)};
+  web_tools::beginUserTurn();
   m_agent->send(std::move(message), m_turn->options);
   saveTurn();
 }

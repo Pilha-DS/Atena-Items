@@ -24,3 +24,13 @@ public:
   std::optional<std::string> invocationSummary(std::string_view arguments) const override;
   RawToolTask runRaw(std::string_view arguments) override;
 };
+
+namespace web_tools {
+
+/**
+ * A new question from the user starts: hand the search budget back, so their next question is not
+ * charged for the searches of the previous one.
+ */
+void beginUserTurn();
+
+} // namespace web_tools

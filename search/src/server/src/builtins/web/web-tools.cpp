@@ -12,6 +12,7 @@
 #include <QHash>
 #include <QHostAddress>
 #include <QPromise>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QTimer>
 #include <QUrl>
@@ -246,12 +247,20 @@ std::vector<SearchResult> parseDuckDuckGo(const QString &page) {
 
 /**
  * DuckDuckGo answers a burst of queries with a challenge page, so searches go through a single queue:
- * one request in flight at a time, starting no more often than `SEARCH_INTERVAL_MS`. Bursts are still
- * answered, in order, just spread out.
+ * one request in flight, with `SEARCH_INTERVAL_MS` plus a little jitter between starts. The engine
+ * publishes no limit, so these numbers are deliberately on the slow side: latency costs a second, a
+ * block costs the feature for an hour.
  */
 class SearchThrottle : public QObject {
 public:
-  static constexpr qint64 SEARCH_INTERVAL_MS = 1000; // at most two searches per two seconds
+  // 1 search every 2s: half the rate that already triggered blocks here.
+  static constexpr qint64 SEARCH_INTERVAL_MS = 2000;
+  // Regular 2000ms gaps are a robot signature; a little noise is free.
+  static constexpr int SEARCH_JITTER_MS = 400;
+  // Budget per question. A model that keeps refining a query burns calls without getting closer.
+  static constexpr std::size_t MAX_SEARCHES = 3;
+  // The budget also refills with time, so clients that never announce a new question are not starved.
+  static constexpr qint64 SEARCH_WINDOW_MS = 60'000;
 
   using Result = AI::AbstractTool::RawToolResult;
   using Request = std::function<QFuture<Result>()>;
@@ -261,11 +270,15 @@ public:
     return throttle;
   }
 
+  /// A new question from the user: give the search budget back.
+  void beginUserTurn() { m_budget.clear(); }
+
   QFuture<Result> submit(Request request, std::function<void()> &cancel) {
     cancel = [] {};
 
     // queuing during a cooldown would just make the model wait for a request that cannot succeed
-    if (const qint64 now = QDateTime::currentMSecsSinceEpoch(); now < m_cooldownUntil) {
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if (now < m_cooldownUntil) {
       const auto seconds = (m_cooldownUntil - now + 999) / 1000;
       return QtFuture::makeReadyValueFuture<Result>(std::unexpected(std::format(
           "Web search is paused for about {}s: DuckDuckGo refused the last request as automated traffic. "
@@ -273,15 +286,26 @@ public:
           seconds)));
     }
 
+    expireBudget();
+    if (m_budget.size() >= MAX_SEARCHES) {
+      return QtFuture::makeReadyValueFuture<Result>(std::unexpected(std::format(
+          "Search budget spent: {} searches already ran for this question. Answer with what you have and "
+          "say which sources you used, instead of searching again.",
+          MAX_SEARCHES)));
+    }
+
     auto task = std::make_shared<Task>(Task{.request = std::move(request)});
     auto future = task->promise.future();
     m_queue.push_back(task);
+    // reserved now, so a burst of calls cannot all pass the budget check before any of them starts
+    m_budget.push_back(now);
 
     cancel = [this, task] {
       if (task->finished) return;
       if (task->started) return; // the request is already out, let it finish
 
       if (const auto it = std::ranges::find(m_queue, task); it != m_queue.end()) m_queue.erase(it);
+      if (!m_budget.empty()) m_budget.pop_back(); // give the slot back
       task->finished = true;
       task->promise.addResult(std::unexpected(std::string("The search was cancelled.")));
       task->promise.finish();
@@ -292,12 +316,20 @@ public:
   }
 
   /**
-   * Stop handing out requests after the engine pushed back: retrying right away only deepens the block.
+   * Stop handing out requests after the engine pushed back: retrying right away only deepens the block,
+   * so each refusal in a row buys a longer pause.
    */
-  void cooldownFor(std::chrono::seconds duration) {
-    const qint64 until = QDateTime::currentMSecsSinceEpoch() + duration.count() * 1000;
-    m_cooldownUntil = std::max(m_cooldownUntil, until);
+  void cooldownForRefusal() {
+    static constexpr std::array<std::chrono::seconds, 3> steps{std::chrono::seconds(30),
+                                                              std::chrono::seconds(120),
+                                                              std::chrono::seconds(600)};
+    const auto step = steps[std::min<std::size_t>(m_refusals, steps.size() - 1)];
+    ++m_refusals;
+    m_cooldownUntil = std::max(m_cooldownUntil, QDateTime::currentMSecsSinceEpoch() + step.count() * 1000);
   }
+
+  /// A search that worked: forget the refusals, so the next pause starts short again.
+  void noteSuccess() { m_refusals = 0; }
 
   /**
    * Fail what is still queued. After a refusal the remaining queries of the same burst would only be
@@ -338,6 +370,7 @@ private:
     // into the pause that keeps the next query from looking like a burst
     qint64 wait = 0;
     if (m_last.isValid()) wait = std::max<qint64>(0, SEARCH_INTERVAL_MS - m_last.elapsed());
+    if (wait > 0) wait += QRandomGenerator::global()->bounded(SEARCH_JITTER_MS + 1);
     if (const qint64 now = QDateTime::currentMSecsSinceEpoch(); now < m_cooldownUntil) {
       wait = std::max(wait, m_cooldownUntil - now);
     }
@@ -369,9 +402,17 @@ private:
     watcher->setFuture(task->request());
   }
 
+  void expireBudget() {
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    while (!m_budget.empty() && now - m_budget.front() > SEARCH_WINDOW_MS)
+      m_budget.pop_front();
+  }
+
   std::deque<std::shared_ptr<Task>> m_queue;
+  std::deque<qint64> m_budget;
   QElapsedTimer m_last;
   qint64 m_cooldownUntil = 0;
+  std::size_t m_refusals = 0;
   bool m_running = false;
   bool m_scheduled = false;
 };
@@ -380,12 +421,15 @@ private:
 
 using namespace web_tools;
 
+void web_tools::beginUserTurn() { SearchThrottle::instance().beginUserTurn(); }
+
 std::string WebSearchTool::description() const {
   return "Search the web and return result titles, URLs and snippets. Use it for anything that may have "
          "changed after your training data: news, prices, releases, documentation. Then open the most "
-         "relevant result with web_fetch to read it. Searches run one at a time with a short pause "
-         "between them, so prefer a single well-chosen query over a run of similar ones. Results come "
-         "from DuckDuckGo and may be missing or outdated, so always mention the URL you relied on.";
+         "relevant result with web_fetch to read it. At most 3 searches are allowed per question and "
+         "they run one at a time with a pause between them, so pick your queries well instead of "
+         "refining in a loop. Results come from DuckDuckGo and may be missing or outdated, so always "
+         "mention the URL you relied on.";
 }
 
 std::string WebSearchTool::generateInputSchema() const {
@@ -437,12 +481,14 @@ AI::AbstractTool::RawToolTask WebSearchTool::runRaw(std::string_view arguments) 
                       "Web search is paused: DuckDuckGo refused the last request as automated traffic. "
                       "Do not retry in a loop; tell the user, or read a page with web_fetch if you know "
                       "its URL.";
-                  throttle.cooldownFor(std::chrono::seconds(30));
+                  throttle.cooldownForRefusal();
                   throttle.failQueued(reason);
                   return std::unexpected(reason);
                 }
                 return std::unexpected(std::string("No results were found for this query."));
               }
+
+              SearchThrottle::instance().noteSuccess();
 
               std::string out;
               if (const auto error = glz::write_json(results, out))
