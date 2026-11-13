@@ -17,6 +17,7 @@
 #include "builtins/wm/wm-extension.hpp"
 #include "builtins/vicinae/vicinae-extension.hpp"
 #include "builtins/system/system-extension.hpp"
+#include "builtins/web/web-extension.hpp"
 #include "builtins/ai/ai-extension.hpp"
 #include "builtins/dictation/dictation-extension.hpp"
 #include "service-registry.hpp"
@@ -44,6 +45,7 @@ CommandDatabase::CommandDatabase(const ServiceRegistry &services) {
   registerRepository<RaycastCompatExtension>();
 #endif
   registerRepository<VicinaeExtension>();
+  registerRepository<WebExtension>();
   registerRepository<CalculatorExtension>();
   registerRepository<ShortcutExtension>();
 

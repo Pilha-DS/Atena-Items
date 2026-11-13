@@ -704,6 +704,9 @@ set(SRCS
 	src/builtins/root/root-search-model.cpp
 	src/builtins/root/root-search-sources.hpp
 	src/builtins/root/root-search-sources.cpp
+	src/builtins/web/web-extension.hpp
+	src/builtins/web/web-tools.hpp
+	src/builtins/web/web-tools.cpp
 	src/ui/views/drag-utils.hpp
 	src/ui/views/drag-utils.cpp
 	src/ui/views/section-source.hpp

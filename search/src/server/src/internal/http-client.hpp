@@ -213,6 +213,17 @@ public:
     return waitForReply(networkManager()->get(req));
   }
 
+  /**
+   * POST a body that is not JSON, such as the url-encoded form most search engines expect.
+   */
+  QFuture<Result<QByteArray>> postRaw(const QString &url, const QByteArray &body, const QByteArray &contentType,
+                                      const RequestOptions &opts = {}) {
+    auto req = createRequest(url, opts);
+    req.setHeader(QNetworkRequest::KnownHeaders::ContentTypeHeader, contentType);
+    qInfo() << "[POST raw]" << req.url();
+    return waitForReply(networkManager()->post(req, body));
+  }
+
   Download *download(const QString &url, const std::filesystem::path &dest, const RequestOptions &opts = {}) {
     auto *download = new Download();
     auto file = std::make_shared<QFile>(QString::fromStdString(dest.string()));
