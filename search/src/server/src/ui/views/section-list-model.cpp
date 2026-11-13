@@ -195,6 +195,19 @@ void SectionListModel::refreshActionPanel() { setSelectedIndex(m_selectedIndex);
 
 void SectionListModel::activateSelected() { m_scope.executePrimaryAction(); }
 
+int SectionListModel::initialSelectionIndex() const {
+  int firstDataItem = -1;
+
+  for (int idx = 0; std::cmp_less(idx, m_flat.size()); ++idx) {
+    const auto &flat = m_flat[idx];
+    if (flat.kind != FlatItem::DataItem) continue;
+    if (firstDataItem < 0) firstDataItem = idx;
+    if (m_sources[flat.sourceIdx]->isAutoSelectable(flat.itemIdx)) return idx;
+  }
+
+  return firstDataItem;
+}
+
 int SectionListModel::nextSelectableIndex(int from, int direction) const {
   int const count = static_cast<int>(m_flat.size());
   return ListNavigation::nextIndex(from, direction, count,

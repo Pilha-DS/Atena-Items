@@ -1,0 +1,7 @@
+---
+alwaysApply: true
+---
+
+# Seguir padroes
+
+Deve seguir padroes que ja existem no projeto. Cada projeto é um fork de outro projeto, sempre que for fazer melhoria deve seguir o padrao ja definido naquele projeto. E nao mudar os criadores.

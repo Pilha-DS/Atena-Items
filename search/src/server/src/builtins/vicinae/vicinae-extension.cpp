@@ -67,6 +67,9 @@ class OpenVicinaeConfig : public BuiltinCallbackCommand {
   ImageURL iconUrl() const override {
     return ImageURL::builtin(BuiltinIcon::Pencil).setBackgroundTint(Omnicast::ACCENT_COLOR);
   }
+  // Configuration actions are surfaced from the settings window (Configuration page) so
+  // they do not clutter the root search. They stay available from Settings > Configuration.
+  bool isDefaultDisabled() const override { return true; }
 
   void execute(CommandController &controller) const override {
     auto ctx = controller.context();
@@ -85,6 +88,7 @@ class ShowLogs : public BuiltinCallbackCommand {
   ImageURL iconUrl() const override {
     return ImageURL::builtin(BuiltinIcon::Paragraph).setBackgroundTint(Omnicast::ACCENT_COLOR);
   }
+  bool isDefaultDisabled() const override { return true; }
 
   void execute(CommandController &controller) const override {
     auto ctx = controller.context();
@@ -102,6 +106,7 @@ class OpenDefaultVicinaeConfig : public BuiltinCallbackCommand {
   ImageURL iconUrl() const override {
     return ImageURL::builtin(BuiltinIcon::Pencil).setBackgroundTint(SemanticColor::Accent);
   }
+  bool isDefaultDisabled() const override { return true; }
 
   void execute(CommandController &controller) const override {
     auto ctx = controller.context();
@@ -144,6 +149,10 @@ class OpenSettingsCommand : public BuiltinCallbackCommand {
     return ImageURL::builtin(BuiltinIcon::Cog).setBackgroundTint(Omnicast::ACCENT_COLOR);
   }
   std::vector<QString> keywords() const override { return {"preferences"}; }
+  // The settings window is exposed as the "Vicinae Settings" desktop entry (which uses the
+  // Vicinae icon), so this builtin stays out of the root search by default to avoid a
+  // duplicate result for the same thing.
+  bool isDefaultDisabled() const override { return true; }
 
   void execute(CommandController &controller) const override {
     auto ctx = controller.context();
@@ -162,6 +171,7 @@ class ReloadScriptDirectoriesCommand : public BuiltinCallbackCommand {
   ImageURL iconUrl() const override {
     return ImageURL(BuiltinIcon::Code).setBackgroundTint(Omnicast::ACCENT_COLOR);
   }
+  bool isDefaultDisabled() const override { return true; }
 
   void execute(CommandController &controller) const override {
     auto ctx = controller.context();

@@ -16,4 +16,6 @@ class ManageFallbackCommand : public BuiltinViewCommand<ManageFallbackViewHost> 
     return tr("Configure what commands are to be presented as fallback options when nothing matches the "
               "search in the root search.");
   }
+  // Reachable from Settings > Configuration, so it does not duplicate in root search.
+  bool isDefaultDisabled() const override { return true; }
 };

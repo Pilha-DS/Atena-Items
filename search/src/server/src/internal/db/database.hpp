@@ -232,6 +232,25 @@ public:
     return Database(handle);
   }
 
+  /**
+   * Open a database this process does not own, such as another app's file.
+   *
+   * Never creates the file: a wrong path must fail loudly instead of leaving an empty database that the
+   * owning app would later take for its own.
+   */
+  static std::expected<Database, std::string> openExisting(const std::filesystem::path &path) {
+    sqlite3 *handle = nullptr;
+    int const rc = sqlite3_open_v2(path.string().c_str(), &handle,
+                                   SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nullptr);
+    if (rc != SQLITE_OK) {
+      std::string err = handle ? sqlite3_errmsg(handle) : "failed to allocate sqlite handle";
+      if (handle) sqlite3_close_v2(handle);
+      return std::unexpected(std::move(err));
+    }
+    sqlite3_busy_timeout(handle, BUSY_TIMEOUT_MS);
+    return Database(handle);
+  }
+
   // Must be applied before any other statement on the connection (SQLCipher requirement).
   std::expected<void, std::string> setKey(KeyView key) {
     static constexpr char HEX_DIGITS[] = "0123456789abcdef";

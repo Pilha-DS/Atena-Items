@@ -8,6 +8,7 @@
 #include "services/toast/toast-service.hpp"
 #include "ui/image/url.hpp"
 #include <QTimer>
+#include <QFutureWatcher>
 #include <iterator>
 #include <ranges>
 
@@ -115,20 +116,29 @@ UninstallAppAction::UninstallAppAction(const std::shared_ptr<AbstractApplication
 
 namespace {
 
-void trashApp(ServiceRegistry *services, NavigationController *navigation,
-              const std::shared_ptr<AbstractApplication> &app) {
-  if (!services->appDb()->uninstall(*app)) {
-    services->toastService()->failure(
-        QCoreApplication::translate("UninstallAppAction", "Failed to uninstall %1").arg(app->displayName()));
-    return;
-  }
+void trashApp(ServiceRegistry *services, const std::shared_ptr<AbstractApplication> &app) {
+  auto *appDb = services->appDb();
+  auto *toast = services->toastService();
+  auto const name = app->displayName();
+  auto *watcher = new QFutureWatcher<bool>(appDb);
 
-  navigation->showHud(
-      QCoreApplication::translate("UninstallAppAction", "Uninstalled %1").arg(app->displayName()));
+  QObject::connect(watcher, &QFutureWatcher<bool>::finished, appDb, [watcher, toast, name]() {
+    bool const ok = watcher->result();
+    watcher->deleteLater();
+
+    if (!ok) {
+      toast->failure(QCoreApplication::translate("UninstallAppAction", "Failed to uninstall %1").arg(name));
+      return;
+    }
+
+    toast->success(QCoreApplication::translate("UninstallAppAction", "Uninstalled %1").arg(name));
+  });
+
+  toast->dynamic(QCoreApplication::translate("UninstallAppAction", "Uninstalling %1…").arg(name));
+  watcher->setFuture(appDb->uninstall(app));
 }
 
-void quitThenTrashApp(ServiceRegistry *services, NavigationController *navigation,
-                      const std::shared_ptr<AbstractApplication> &app) {
+void quitThenTrashApp(ServiceRegistry *services, const std::shared_ptr<AbstractApplication> &app) {
   auto *runtime = services->appRuntime();
 
   if (!runtime->quit(*app)) {
@@ -142,7 +152,7 @@ void quitThenTrashApp(ServiceRegistry *services, NavigationController *navigatio
   QObject::connect(runtime, &AppRuntime::runningAppsChanged, guard, [=]() {
     if (runtime->isRunning(*app)) return;
     guard->deleteLater();
-    trashApp(services, navigation, app);
+    trashApp(services, app);
   });
 
   QTimer::singleShot(std::chrono::seconds(15), guard, [=]() {
@@ -166,9 +176,9 @@ void UninstallAppAction::execute(ApplicationContext *ctx) {
   navigation->confirmAlert(tr("Uninstall %1?").arg(app->displayName()), message.arg(app->displayName()),
                            [=]() {
                              if (services->appRuntime()->isRunning(*app)) {
-                               quitThenTrashApp(services, navigation, app);
+                               quitThenTrashApp(services, app);
                              } else {
-                               trashApp(services, navigation, app);
+                               trashApp(services, app);
                              }
                            });
 }

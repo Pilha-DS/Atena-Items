@@ -149,7 +149,10 @@ Item {
     }
 
     function selectFirst() {
-        listView.currentIndex = root.listModel.nextSelectableIndex(-1, 1);
+        if (root.listModel && typeof root.listModel.initialSelectionIndex === "function")
+            listView.currentIndex = root.listModel.initialSelectionIndex();
+        else
+            listView.currentIndex = root.listModel.nextSelectableIndex(-1, 1);
     }
 
     onListModelChanged: {

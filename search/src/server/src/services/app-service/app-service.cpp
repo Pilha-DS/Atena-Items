@@ -1,5 +1,7 @@
 #include "app-service.hpp"
 #include "utils/timer.hpp"
+#include <QFuture>
+#include <QtConcurrent>
 #include <chrono>
 #include <qlogging.h>
 #include <qnumeric.h>
@@ -119,10 +121,16 @@ bool AppService::openLocation(const AbstractApplication &app) const { return m_p
 
 bool AppService::canUninstall(const AbstractApplication &app) const { return m_provider->canUninstall(app); }
 
-bool AppService::uninstall(const AbstractApplication &app) {
-  if (!m_provider->canUninstall(app) || !m_provider->uninstall(app)) return false;
-  scanSync();
-  return true;
+QFuture<bool> AppService::uninstall(const std::shared_ptr<AbstractApplication> &app) {
+  if (!app || !m_provider->canUninstall(*app)) return QtFuture::makeReadyValueFuture(false);
+
+  // `app` is captured by value so that it outlives the caller, as the removal may run for
+  // a while on the worker thread.
+  return QtConcurrent::run([provider = m_provider.get(), app] { return provider->uninstall(*app); })
+      .then(this, [this](bool ok) {
+        if (ok) scanSync();
+        return ok;
+      });
 }
 
 void AppService::handleDirectoryChanged(const QString &path) {

@@ -41,11 +41,13 @@ LauncherWindowBase {
     readonly property int _h: Launcher.overrideHeight || Config.windowHeight
     readonly property int _contentH: Launcher.compacted ? root.appearance.searchBarHeight + 2 * root.appearance.contentInset : root._h
     readonly property int expandedHeight: root._h + 2 * shadowPadding
+    readonly property bool favoritesDockVisible: Launcher.favoriteDockVisible && !Launcher.compacted && !Launcher.hasOverlay
+    readonly property int dockSlot: favoritesDockVisible ? 60 : 0
 
-    width: root._w + 2 * shadowPadding
+    width: root._w + root.dockSlot + 2 * shadowPadding
     height: expandedHeight
-    minimumWidth: root._w + 2 * shadowPadding
-    maximumWidth: root._w + 2 * shadowPadding
+    minimumWidth: root._w + root.dockSlot + 2 * shadowPadding
+    maximumWidth: root._w + root.dockSlot + 2 * shadowPadding
     minimumHeight: expandedHeight
     maximumHeight: expandedHeight
     title: qsTr("Vicinae Launcher")
@@ -55,7 +57,7 @@ LauncherWindowBase {
 
     WindowMaterial.enabled: root.blurEnabled && !root.nativeChrome
     WindowMaterial.radius: root.cornerRadius
-    WindowMaterial.region: Qt.rect(shadowPadding, shadowPadding, root._w, Launcher.compacted ? root._contentH : root._h)
+    WindowMaterial.region: Qt.rect(shadowPadding, shadowPadding, root.dockSlot + root._w, Launcher.compacted ? root._contentH : root._h)
 
     Item {
         id: shadowMask
@@ -67,7 +69,7 @@ LauncherWindowBase {
         Rectangle {
             x: root.shadowPadding
             y: root.shadowPadding
-            width: root._w
+            width: root.dockSlot + root._w
             height: root._contentH
             radius: Config.borderRounding
             color: "white"
@@ -82,7 +84,7 @@ LauncherWindowBase {
         RectangularShadow {
             x: root.shadowPadding
             y: root.shadowPadding
-            width: root._w
+            width: root.dockSlot + root._w
             height: root._contentH
             radius: root.cornerRadius
             blur: root.shadowPadding
@@ -97,9 +99,20 @@ LauncherWindowBase {
         }
     }
 
+    Rectangle {
+        id: dockBackdrop
+        visible: root.dockSlot > 0
+        x: root.shadowPadding
+        y: root.shadowPadding
+        width: root.dockSlot + root._w
+        height: root._contentH
+        radius: root.cornerRadius
+        color: root.appearance.windowBackground
+    }
+
     Item {
         id: content
-        x: root.shadowPadding
+        x: root.shadowPadding + root.dockSlot
         y: root.shadowPadding
         width: root._w
         height: root._h
@@ -244,7 +257,12 @@ LauncherWindowBase {
 
         SourceBlendRect {
             visible: !Launcher.compacted && !root.nativeChrome
-            anchors.fill: parent
+            // The border wraps the favorites dock too, so the whole window reads as
+            // a single surface instead of two adjoining ones.
+            x: -root.dockSlot
+            y: 0
+            width: root.dockSlot + root._w
+            height: root._h
             radius: root.cornerRadius
             overlay: true
             borderColor: Config.withAlpha(Theme.mainWindowBorder, Config.windowOpacity)
@@ -266,6 +284,7 @@ LauncherWindowBase {
             id: actionPanelPopover
             parent: (floatingStatusBar.item as LauncherStatusBar)?.popupAnchor ?? floatingStatusBar
             controller: Launcher.actionPanel
+            alignLeft: Launcher.actionPanelAnchoredLeft
             maxHeight: Math.round(root.height * 0.55)
         }
 
@@ -326,6 +345,23 @@ LauncherWindowBase {
             onPositionChanged: Launcher.updateWindowDrag()
             onReleased: Launcher.endWindowDrag()
             onCanceled: Launcher.endWindowDrag()
+        }
+    }
+
+    FavoritesDock {
+        id: favoritesDock
+        visible: root.dockSlot > 0
+        x: root.shadowPadding
+        y: root.shadowPadding
+        width: root.dockSlot
+        height: root._contentH
+        appearance: root.appearance
+        onItemActivated: id => Launcher.activateFavoriteDockItem(id)
+        onItemActionsRequested: id => Launcher.openFavoriteDockItemActions(id)
+        onSearchRequested: searchBar.focusInput()
+        onTextTyped: text => {
+            searchBar.focusInput();
+            Launcher.forwardSearchText(text);
         }
     }
 
@@ -460,16 +496,49 @@ LauncherWindowBase {
         }
     }
 
+    Connections {
+        target: searchBar.item
+        ignoreUnknownSignals: true
+        function onDockEntryRequested() {
+            favoritesDock.focusDock();
+        }
+        function onInputFocused() {
+            favoritesDock.releaseKeyboard();
+        }
+    }
+
+    // A panel opened for a dock item owns the keyboard while it is up; handing it
+    // back to the dock keeps arrow navigation going after the panel closes.
+    Connections {
+        target: Launcher
+        function onFavoriteDockPanelClosed() {
+            if (favoritesDock.keyboardMode)
+                favoritesDock.focusDock();
+            else
+                searchBar.focusInput();
+        }
+    }
+
     Shortcut {
         sequence: "Escape"
         enabled: !Launcher.alertModel.visible && !Launcher.actionPanel.open && !Launcher.footerPanel.open && !Launcher.hasOverlay
-        onActivated: Launcher.handleEscape()
+        onActivated: {
+            if (favoritesDock.keyboardMode) {
+                // First escape leaves the dock instead of closing the launcher.
+                favoritesDock.releaseKeyboard();
+                return;
+            }
+            Launcher.handleEscape();
+        }
     }
 
     Shortcut {
         sequence: "Shift+Escape"
         enabled: !Launcher.alertModel.visible
-        onActivated: Launcher.popToRoot()
+        onActivated: {
+            favoritesDock.releaseKeyboard();
+            Launcher.popToRoot();
+        }
     }
 
     Shortcut {
@@ -478,6 +547,10 @@ LauncherWindowBase {
         onActivated: {
             if (Launcher.compacted)
                 Launcher.expand();
+            if (favoritesDock.keyboardMode && !Launcher.actionPanel.open && favoritesDock.currentId !== "") {
+                Launcher.openFavoriteDockItemActions(favoritesDock.currentId);
+                return;
+            }
             Launcher.actionPanel.toggle();
         }
     }

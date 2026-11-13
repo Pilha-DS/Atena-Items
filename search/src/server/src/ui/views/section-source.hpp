@@ -33,6 +33,13 @@ public:
   virtual bool isDraggable(int) const { return false; }
   virtual std::unique_ptr<QMimeData> dragMimeData(int) const { return {}; }
 
+  /**
+   * Whether the list may select this item on its own, such as when the model is reset after the
+   * search query changes. Items that are always displayed but are not the expected result of a
+   * search return false, so that Enter keeps activating what the user actually searched for.
+   */
+  virtual bool isAutoSelectable(int) const { return true; }
+
   virtual QVariant customData(int, int) const { return {}; }
   virtual QHash<int, QByteArray> customRoleNames() const { return {}; }
   virtual QHash<int, QVariant> customRoleDefaults() const { return {}; }

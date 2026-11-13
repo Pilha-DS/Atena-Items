@@ -21,6 +21,10 @@ Window {
                 "title": qsTr("Keybindings"),
                 "page": shortcutsPage
             },
+            "configuration": {
+                "title": qsTr("Configuration"),
+                "page": configurationPage
+            },
             "advanced": {
                 "title": qsTr("Advanced"),
                 "page": advancedPage
@@ -364,6 +368,11 @@ Window {
     Component {
         id: shortcutsPage
         ShortcutsSettingsPage {}
+    }
+
+    Component {
+        id: configurationPage
+        ConfigurationSettingsPage {}
     }
 
     Component {

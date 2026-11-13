@@ -6,7 +6,6 @@ alwaysApply: false
 
 # Documentação
 
-- **README em português do Brasil.** Código, identificadores, nomes de arquivo e
   comentários de código em inglês.
 - Cada projeto tem `README.md` próprio com, nesta ordem: o que é, requisitos,
   rodar/buildar, instalar, configuração, estrutura, problemas comuns, licença.

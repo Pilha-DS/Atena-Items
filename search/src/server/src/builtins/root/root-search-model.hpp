@@ -11,6 +11,7 @@ class AppService;
 class NewsService;
 class RootItemManager;
 class UpdateService;
+class IamodRootSection;
 
 namespace config {
 class Manager;
@@ -52,6 +53,7 @@ private:
   RootUpdateSection *m_updateSource;
   RootLinkSection *m_linkSource;
   RootCalculatorSection *m_calcSource;
+  IamodRootSection *m_iamodSource;
   RootNewsSection *m_newsSource;
   RootFavoritesSection *m_favoritesSource;
   RootResultsSection *m_resultsSource;

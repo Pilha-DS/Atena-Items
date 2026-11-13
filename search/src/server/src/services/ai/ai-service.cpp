@@ -6,6 +6,7 @@
 #include "internal/glaze-qt.hpp"
 #include "services/ai/ai-provider-types.hpp"
 #include "services/ai/acp/acp-provider.hpp"
+#include "services/ai/deepseek/deepseek-provider.hpp"
 #include "services/ai/mistral/mistral-provider.hpp"
 #include "services/ai/ollama/ollama-ai-provider.hpp"
 #include "services/ai/groq/groq-provider.hpp"
@@ -118,6 +119,7 @@ std::unique_ptr<AbstractProvider> Service::createProvider(const std::string &id,
   if (type == "audio-cpp") return std::make_unique<AudioCppProvider>(id);
   if (type == "mistral") return std::make_unique<MistralProvider>(id);
   if (type == "openai") return std::make_unique<OpenAIProvider>(id);
+  if (type == "deepseek") return std::make_unique<DeepSeekProvider>(id);
   if (type == "groq") return std::make_unique<GroqProvider>(id);
   if (type == "openrouter") return std::make_unique<OpenRouterProvider>(id);
   if (const auto *info = findProviderType(type); info && info->category == Category::Agent)

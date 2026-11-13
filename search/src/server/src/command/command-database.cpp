@@ -18,6 +18,7 @@
 #include "builtins/vicinae/vicinae-extension.hpp"
 #include "builtins/system/system-extension.hpp"
 #include "builtins/web/web-extension.hpp"
+#include "builtins/notes/notes-extension.hpp"
 #include "builtins/ai/ai-extension.hpp"
 #include "builtins/dictation/dictation-extension.hpp"
 #include "service-registry.hpp"
@@ -46,6 +47,7 @@ CommandDatabase::CommandDatabase(const ServiceRegistry &services) {
 #endif
   registerRepository<VicinaeExtension>();
   registerRepository<WebExtension>();
+  registerRepository<NotesExtension>();
   registerRepository<CalculatorExtension>();
   registerRepository<ShortcutExtension>();
 

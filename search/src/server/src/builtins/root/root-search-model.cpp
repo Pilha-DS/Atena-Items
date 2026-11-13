@@ -1,4 +1,5 @@
 #include "builtins/root/root-search-model.hpp"
+#include "builtins/iamod/iamod-root-section.hpp"
 #include "config/config.hpp"
 #include "services/calculator-service/abstract-calculator-backend.hpp"
 #include "service-registry.hpp"
@@ -58,12 +59,15 @@ RootSearchModel::RootSearchModel(const ViewScope &scope, QObject *parent)
   m_updateSource = new RootUpdateSection(m_updateService);
   m_linkSource = new RootLinkSection;
   m_calcSource = new RootCalculatorSection;
+  m_iamodSource = new IamodRootSection;
   m_newsSource = new RootNewsSection;
   m_favoritesSource = new RootFavoritesSection(m_manager);
   m_resultsSource = new RootResultsSection(m_manager);
   m_filesSource = new RootFilesSection(m_appDb);
   m_fallbackSource = new RootFallbackSection(m_manager);
 
+  // IAMod comes first so that asking a question is always one row away, whatever is being searched.
+  addSource(m_iamodSource);
   addSource(m_updateSource);
   addSource(m_linkSource);
   addSource(m_calcSource);
@@ -104,9 +108,13 @@ void RootSearchModel::refresh() {
 bool RootSearchModel::rerunSearch() {
   auto text = QString::fromStdString(m_query);
 
+  m_iamodSource->setQuery(m_query);
+
   if (isAbsolutePathLike(text)) {
     std::error_code ec;
     if (std::filesystem::exists(m_query, ec)) {
+      // A path query is about finding the file itself, asking the AI has nothing to add.
+      m_iamodSource->setVisible(false);
       m_updateSource->setUpdate({});
       m_linkSource->setLink({});
       m_resultsSource->setItems({});
@@ -123,6 +131,8 @@ bool RootSearchModel::rerunSearch() {
 
   // a link is shown on top of the regular results, it does not replace them
   std::optional<LinkItem> link;
+
+  m_iamodSource->setVisible(true);
 
   if (auto url = QUrl(text); url.isValid() && url.scheme().size() >= MIN_SCHEME_LENGTH) {
     if (auto app = m_appDb->findDefaultOpener(text)) { link = LinkItem{.app = app, .url = text}; }
@@ -256,7 +266,7 @@ void RootSearchModel::handleFileSearchFinished() {
   m_hasFileResults = true;
   m_fallbackSource->setItems(m_manager->fallbackItems());
 
-  bool const atDefault = selectedIndex() < 0 || selectedIndex() == nextSelectableIndex(-1, 1);
+  bool const atDefault = selectedIndex() < 0 || selectedIndex() == initialSelectionIndex();
 
   auto saved = selectFirstOnReset();
   setSelectFirstOnReset(false);
@@ -264,7 +274,7 @@ void RootSearchModel::handleFileSearchFinished() {
   setSelectFirstOnReset(saved);
 
   if (atDefault) {
-    setSelectedIndex(nextSelectableIndex(-1, 1));
+    setSelectedIndex(initialSelectionIndex());
   } else {
     refreshActionPanel();
   }

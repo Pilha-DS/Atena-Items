@@ -30,6 +30,8 @@
 #include "services/ai/ai-preferences.hpp"
 #include "services/ai/ai-service.hpp"
 #include "services/ai/ai-service.hpp"
+#include "services/app-runtime/app-runtime.hpp"
+#include "services/navigation/list-navigation.hpp"
 #include "services/root-item-manager/root-item-manager.hpp"
 #include "ui/settings/settings-controller.hpp"
 #include "services/toast/toast-service.hpp"
@@ -98,6 +100,18 @@ LauncherWindow::LauncherWindow(ApplicationContext &ctx, QObject *parent)
           &LauncherWindow::refreshQuickAIAvailability);
   connect(services->rootItemManager(), &RootItemManager::itemsChanged, this,
           &LauncherWindow::refreshQuickAIAvailability);
+  connect(services->rootItemManager(), &RootItemManager::itemsChanged, this,
+          &LauncherWindow::refreshFavoriteDockItems);
+  connect(services->rootItemManager(), &RootItemManager::metadataChanged, this,
+          &LauncherWindow::refreshFavoriteDockItems);
+  connect(services->rootItemManager(), &RootItemManager::itemFavoriteChanged, this,
+          &LauncherWindow::refreshFavoriteDockItems);
+  connect(services->rootItemManager(), &RootItemManager::favoriteOrderChanged, this,
+          &LauncherWindow::refreshFavoriteDockItems);
+  if (auto *appRuntime = services->appRuntime()) {
+    connect(appRuntime, &AppRuntime::frontmostAppChanged, this, &LauncherWindow::refreshFavoriteDockItems);
+  }
+  refreshFavoriteDockItems();
   connect(m_ctx.navigation.get(), &NavigationController::searchTextTampered, this,
           [this](const QString &text) { updateCanAskAI(text); });
   connect(this, &LauncherWindow::atRootChanged, this, [this] { updateCanAskAI(); });
@@ -193,12 +207,24 @@ LauncherWindow::LauncherWindow(ApplicationContext &ctx, QObject *parent)
     }
   });
 
-  connect(nav, &NavigationController::activeActionPanelChanged, this,
-          [this, nav]() { m_actionPanel->syncToView(nav->topState()->sender); });
+  connect(nav, &NavigationController::activeActionPanelChanged, this, [this, nav]() {
+    m_dockActionPanelActive = false;
+    setActionPanelAnchoredLeft(false);
+    m_actionPanel->syncToView(nav->topState()->sender);
+  });
+
+  // A dock panel belongs to no view, so once it closes the status bar must go back to
+  // reflecting the actions of the active view instead of keeping the dock item's.
+  connect(m_actionPanel, &ActionPanelController::openChanged, this, [this]() {
+    if (m_actionPanel->isOpen() || !m_dockActionPanelActive) return;
+    QMetaObject::invokeMethod(this, &LauncherWindow::restoreViewActionPanel, Qt::QueuedConnection);
+  });
 
   connect(nav, &NavigationController::viewPushed, this, [this](const BaseView *) {
     m_actionPanel->close();
     m_footerPanel->close();
+    // Navigating away hands the keyboard back to the new view.
+    setFavoriteDockKeyboardActive(false);
   });
 
   connect(m_footerPanel, &ActionPanelController::openChanged, this, [this]() {
@@ -372,8 +398,8 @@ bool LauncherWindow::eventFilter(QObject *obj, QEvent *event) {
     if (event->type() == QEvent::KeyRelease) { return QObject::eventFilter(obj, event); }
     // the current view host gets first pick at any key press, unless a component
     // that owns the keyboard (overlay, alert, action panel) is up.
-    const bool viewOwnsInput =
-        !m_hasOverlay && !m_alertModel->visible() && !m_actionPanel->isOpen() && !m_footerPanel->isOpen();
+    const bool viewOwnsInput = !m_hasOverlay && !m_alertModel->visible() && !m_actionPanel->isOpen() &&
+                               !m_footerPanel->isOpen() && !m_favoriteDockKeyboardActive;
     if (viewOwnsInput) {
       auto *host = dynamic_cast<ViewHostBase *>(m_commandViewHost);
       if (host && host->inputFilter(ke)) return true;
@@ -416,6 +442,7 @@ void LauncherWindow::handleVisibilityChanged(bool visible) {
 #endif
   } else {
     setCommandHeld(false);
+    setFavoriteDockKeyboardActive(false);
     LauncherWindowPlatform::suppressHeldKeyReleases();
     if (m_dragOverlayVisible) endWindowDrag();
     m_window->hide();
@@ -919,6 +946,83 @@ void LauncherWindow::saveWindowPosition() {
 }
 
 void LauncherWindow::openFooterMenu() { m_footerPanel->toggle(true); }
+
+void LauncherWindow::refreshFavoriteDockItems() {
+  auto *manager = m_ctx.services->rootItemManager();
+  QVariantList items;
+
+  for (const auto &item : manager->queryFavorites()) {
+    if (!item) continue;
+    items.append(QVariantMap{
+        {QStringLiteral("id"), QString::fromStdString(static_cast<std::string>(item->uniqueId()))},
+        {QStringLiteral("title"), item->title()},
+        {QStringLiteral("iconSource"), qml::imageSourceFor(item->iconUrl())},
+        {QStringLiteral("isActive"), item->isActive()},
+    });
+  }
+
+  if (items == m_favoriteDockItems) return;
+
+  m_favoriteDockItems = std::move(items);
+  emit favoriteDockItemsChanged();
+}
+
+void LauncherWindow::activateFavoriteDockItem(const QString &id) {
+  auto entrypoint = EntrypointId::fromSerialized(id.toStdString());
+  if (!entrypoint.isValid()) return;
+  m_ctx.navigation->activateEntrypoint(entrypoint, {.toggleIfAlreadyActive = false});
+}
+
+void LauncherWindow::openFavoriteDockItemActions(const QString &id) {
+  auto *manager = m_ctx.services->rootItemManager();
+  auto entrypoint = EntrypointId::fromSerialized(id.toStdString());
+  if (!entrypoint.isValid()) return;
+
+  auto metadata = manager->itemMetadata(entrypoint);
+  if (!metadata.item) return;
+
+  auto panel = metadata.item->newActionPanel(&m_ctx, metadata);
+  if (!panel) return;
+
+  m_actionPanel->setActions(std::move(panel));
+  m_actionPanel->open();
+
+  if (m_actionPanel->isOpen()) {
+    m_dockActionPanelActive = true;
+    setActionPanelAnchoredLeft(true);
+  } else {
+    // `setActions` took the view's action root away even though nothing could be shown.
+    restoreViewActionPanel();
+  }
+}
+
+void LauncherWindow::restoreViewActionPanel() {
+  bool const wasDockPanel = m_dockActionPanelActive;
+  m_dockActionPanelActive = false;
+  setActionPanelAnchoredLeft(false);
+  if (!m_actionPanel->isOpen()) {
+    if (auto *state = m_ctx.navigation->topState()) { m_actionPanel->syncToView(state->sender); }
+  }
+  // Only the dock's own panel should pull keyboard focus back to the dock.
+  if (wasDockPanel) emit favoriteDockPanelClosed();
+}
+
+void LauncherWindow::setFavoriteDockKeyboardActive(bool value) {
+  if (m_favoriteDockKeyboardActive == value) return;
+  m_favoriteDockKeyboardActive = value;
+  emit favoriteDockKeyboardActiveChanged();
+}
+
+int LauncherWindow::favoriteDockNeighbor(int from, int direction) const {
+  return ListNavigation::nextIndex(from, direction, static_cast<int>(m_favoriteDockItems.size()),
+                                   [](int) { return true; });
+}
+
+void LauncherWindow::setActionPanelAnchoredLeft(bool value) {
+  if (m_actionPanelAnchoredLeft == value) return;
+  m_actionPanelAnchoredLeft = value;
+  emit actionPanelAnchoredLeftChanged();
+}
 
 void LauncherWindow::buildFooterMenu() {
   auto state = std::make_unique<ActionPanelState>();

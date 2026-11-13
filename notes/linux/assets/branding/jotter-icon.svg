@@ -1,39 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <defs>
-    <linearGradient id="page" x1="120" y1="130" x2="392" y2="380" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#8B5CF6"/>
-      <stop offset="0.55" stop-color="#6366F1"/>
-      <stop offset="1" stop-color="#3B82F6"/>
-    </linearGradient>
-    <linearGradient id="shine" x1="140" y1="120" x2="140" y2="290" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ffffff" stop-opacity="0.26"/>
-      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
-    </linearGradient>
-    <linearGradient id="fold" x1="216" y1="0" x2="296" y2="0" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0B1020" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="#0B1020" stop-opacity="0.22"/>
-      <stop offset="1" stop-color="#0B1020" stop-opacity="0"/>
-    </linearGradient>
-  </defs>
-  <g transform="translate(256 256) scale(1.45) translate(-256 -256)">
-    <!-- left and right pages -->
-    <path d="M256 158c-23-18-51-26-78-26-23 0-42 4-54 10v218c12-6 31-10 54-10 27 0 55 8 78 26z" fill="url(#page)"/>
-    <path d="M256 158c23-18 51-26 78-26 23 0 42 4 54 10v218c-12-6-31-10-54-10-27 0-55 8-78 26z" fill="url(#page)"/>
-
-    <!-- light falling on the top of the pages -->
-    <path d="M256 158c-23-18-51-26-78-26-23 0-42 4-54 10v76c12-6 31-10 54-10 27 0 55 8 78 26z" fill="url(#shine)"/>
-    <path d="M256 158c23-18 51-26 78-26 23 0 42 4 54 10v76c-12-6-31-10-54-10-27 0-55 8-78 26z" fill="url(#shine)"/>
-
-    <!-- shadow where the pages meet, then the spine itself -->
-    <rect x="216" y="150" width="80" height="240" fill="url(#fold)"/>
-    <path d="M256 166v200" fill="none" stroke="#ffffff" stroke-opacity="0.75" stroke-width="6" stroke-linecap="round"/>
-
-    <!-- writing -->
-    <g stroke="#ffffff" stroke-opacity="0.6" stroke-width="14" stroke-linecap="round">
-      <path d="M150 218h74"/>
-      <path d="M150 262h44"/>
-      <path d="M288 218h74"/>
-      <path d="M288 262h44"/>
-    </g>
+  <!-- Monochrome tile with an outlined book, matching the Android launcher icon. -->
+  <rect width="512" height="512" rx="120" fill="#000000"/>
+  <g transform="translate(256 256) scale(14.5) translate(-12 -12)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 7v14"/>
+    <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/>
   </g>
 </svg>

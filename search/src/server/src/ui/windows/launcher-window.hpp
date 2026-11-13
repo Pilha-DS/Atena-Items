@@ -83,6 +83,11 @@ private:
   Q_PROPERTY(QVariantList dragGuideYs READ dragGuideYs NOTIFY dragOverlayChanged)
   Q_PROPERTY(int dragActiveAnchor READ dragActiveAnchor NOTIFY dragActiveAnchorChanged)
   Q_PROPERTY(bool filePicking READ filePicking NOTIFY filePickingChanged)
+  Q_PROPERTY(QVariantList favoriteDockItems READ favoriteDockItems NOTIFY favoriteDockItemsChanged)
+  Q_PROPERTY(bool favoriteDockVisible READ favoriteDockVisible NOTIFY favoriteDockItemsChanged)
+  Q_PROPERTY(bool favoriteDockKeyboardActive READ favoriteDockKeyboardActive WRITE
+                 setFavoriteDockKeyboardActive NOTIFY favoriteDockKeyboardActiveChanged)
+  Q_PROPERTY(bool actionPanelAnchoredLeft READ actionPanelAnchoredLeft NOTIFY actionPanelAnchoredLeftChanged)
 
 public:
   explicit LauncherWindow(ApplicationContext &ctx, QObject *parent = nullptr);
@@ -126,6 +131,11 @@ public:
   int lsKeyboardInteractivity() const { return m_lsKeyboardInteractivity; }
   static bool canPositionWindow();
   bool commandHeld() const { return m_commandHeld; }
+  QVariantList favoriteDockItems() const { return m_favoriteDockItems; }
+  bool favoriteDockVisible() const { return !m_favoriteDockItems.isEmpty(); }
+  bool favoriteDockKeyboardActive() const { return m_favoriteDockKeyboardActive; }
+  void setFavoriteDockKeyboardActive(bool value);
+  bool actionPanelAnchoredLeft() const { return m_actionPanelAnchoredLeft; }
 
   Q_INVOKABLE void expand();
   Q_INVOKABLE void forwardSearchText(const QString &text);
@@ -152,6 +162,9 @@ public:
   QVariantList dragGuideYs() const { return m_dragGuideYs; }
   int dragActiveAnchor() const { return m_dragActiveAnchor; }
   Q_INVOKABLE void openFooterMenu();
+  Q_INVOKABLE void activateFavoriteDockItem(const QString &id);
+  Q_INVOKABLE void openFavoriteDockItemActions(const QString &id);
+  Q_INVOKABLE int favoriteDockNeighbor(int from, int direction) const;
 
 signals:
   void compactedChanged();
@@ -186,6 +199,10 @@ signals:
   void dragActiveAnchorChanged();
   void filePickingChanged();
   void rootSearchChanged();
+  void favoriteDockItemsChanged();
+  void favoriteDockKeyboardActiveChanged();
+  void favoriteDockPanelClosed();
+  void actionPanelAnchoredLeftChanged();
 
 private:
   bool eventFilter(QObject *obj, QEvent *event) override;
@@ -211,6 +228,9 @@ private:
   void buildFooterMenu();
   void setCommandHeld(bool held);
   void syncCommandHeld(const QKeyEvent *event);
+  void refreshFavoriteDockItems();
+  void restoreViewActionPanel();
+  void setActionPanelAnchoredLeft(bool value);
 
   ApplicationContext &m_ctx;
   ActionPanelController *m_actionPanel;
@@ -280,4 +300,9 @@ private:
   QVariantList m_completerArgs;
   QString m_completerIcon;
   QVariantList m_completerValues;
+
+  QVariantList m_favoriteDockItems;
+  bool m_dockActionPanelActive = false;
+  bool m_favoriteDockKeyboardActive = false;
+  bool m_actionPanelAnchoredLeft = false;
 };

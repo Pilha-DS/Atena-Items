@@ -9,6 +9,12 @@ Item {
     property int horizontalPadding: 16
     property real textSize: Theme.regularFontSize * 1.2
     property bool flatAccessories: false
+    // Mirrors the launcher window's dock slot: the strip only exists while there are
+    // favorites to show and nothing is covering the window.
+    readonly property bool dockAvailable: Launcher.favoriteDockVisible && !Launcher.hasOverlay
+
+    signal dockEntryRequested()
+    signal inputFocused()
 
     function focusInput() {
         if (!Launcher.searchInteractive || !Launcher.searchVisible)
@@ -92,6 +98,11 @@ Item {
                         return false;
 
                     searchDebounce.restart();
+                }
+
+                onActiveFocusChanged: {
+                    if (activeFocus)
+                        root.inputFocused();
                 }
 
                 onDisplayTextChanged: {
@@ -286,6 +297,15 @@ Item {
 
                     // qmllint disable missing-property
                     const navigatable = typeof root.commandView.moveLeft === "function";
+
+                    // At the very start of an empty query the left arrow has nothing to
+                    // do in the text field, so it becomes the way into the favorites
+                    // dock. Views that navigate horizontally keep their left arrow.
+                    if (root.dockAvailable && !navigatable && event.modifiers == Qt.NoModifier && searchInput.text === "" && searchInput.cursorPosition === 0) {
+                        root.dockEntryRequested();
+                        event.accepted = true;
+                        return;
+                    }
 
                     if (navigatable && event.modifiers == Qt.NoModifier) {
                         event.accepted = root.commandView.moveLeft();

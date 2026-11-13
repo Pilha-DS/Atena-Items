@@ -1,5 +1,6 @@
 #pragma once
 #include <memory>
+#include <QFuture>
 #include <qfilesystemwatcher.h>
 #include <qlogging.h>
 #include <qobject.h>
@@ -75,7 +76,15 @@ public:
   bool showInFileBrowser(const std::filesystem::path &path, bool select) const;
   bool openLocation(const AbstractApplication &app) const;
   bool canUninstall(const AbstractApplication &app) const;
-  bool uninstall(const AbstractApplication &app);
+
+  /**
+   * Uninstalls the application.
+   *
+   * The removal runs on a worker thread and the app list is rescanned once it is done:
+   * uninstalling may prompt for a password (pkexec) or keep a package manager busy for a
+   * while, neither of which may block the UI thread.
+   */
+  QFuture<bool> uninstall(const std::shared_ptr<AbstractApplication> &app);
 
   bool openTarget(const QString &target) const;
   bool openTarget(const QUrl &target) const;

@@ -62,7 +62,10 @@ GenericListView {
                 calcAnswerUnit: delegateLoader.calcAnswerUnit
                 quickAccessIndex: delegateLoader.quickAccessIndex
                 selected: searchListView.currentIndex === delegateLoader.index
-                onClicked: searchListView.currentIndex = delegateLoader.index
+                onClicked: {
+                    Launcher.favoriteDockKeyboardActive = false;
+                    searchListView.currentIndex = delegateLoader.index;
+                }
                 onActivated: searchListView.itemActivated(delegateLoader.index)
             }
         }
@@ -82,8 +85,17 @@ GenericListView {
                 quickAccessIndex: delegateLoader.quickAccessIndex
                 selected: searchListView.currentIndex === delegateLoader.index
                 draggable: delegateLoader.isDraggable
-                onClicked: searchListView.currentIndex = delegateLoader.index
+                onClicked: {
+                    // A mouse pick means the user is back on the list, so the dock must
+                    // stop eating the arrow keys/returns.
+                    Launcher.favoriteDockKeyboardActive = false;
+                    searchListView.currentIndex = delegateLoader.index;
+                }
                 onActivated: searchListView.itemActivated(delegateLoader.index)
+                onRightClicked: {
+                    searchListView.currentIndex = delegateLoader.index;
+                    Launcher.actionPanel.openPanel();
+                }
                 onDragRequested: function (source) {
                     searchListView.currentIndex = delegateLoader.index;
                     searchListView.cmdModel.startDrag(delegateLoader.index, source);

@@ -24,6 +24,10 @@ struct OpenAIFields {
   std::string apiKey;
 };
 
+struct DeepSeekFields {
+  std::string apiKey;
+};
+
 struct GroqFields {
   std::string apiKey;
 };
@@ -122,6 +126,16 @@ template <> struct PreferenceSchema<AI::OpenAIFields> {
       .kind = PreferenceMeta::Kind::Password,
   };
   Q_DECLARE_TR_FUNCTIONS(OpenAIFields)
+};
+
+template <> struct PreferenceSchema<AI::DeepSeekFields> {
+  PreferenceMeta apiKey{
+      .title = tr("API Key"),
+      .description = tr("Your DeepSeek API key. You can create one on the DeepSeek platform."),
+      .placeholder = "sk-...",
+      .kind = PreferenceMeta::Kind::Password,
+  };
+  Q_DECLARE_TR_FUNCTIONS(DeepSeekFields)
 };
 
 template <> struct PreferenceSchema<AI::GroqFields> {
@@ -315,6 +329,15 @@ inline constexpr auto PROVIDER_TYPES = std::to_array<ProviderTypeInfo>({
         .cardinality = Cardinality::Single,
         .category = Category::Cloud,
         .fields = +[] { return describePreferences<OpenAIFields>(); },
+    },
+    {
+        .type = "deepseek",
+        .label = "DeepSeek",
+        .icon = BuiltinIcon::Deepseek,
+        .description = "DeepSeek cloud API. Inexpensive language models, with a reasoning variant.",
+        .cardinality = Cardinality::Single,
+        .category = Category::Cloud,
+        .fields = +[] { return describePreferences<DeepSeekFields>(); },
     },
     {
         .type = "groq",

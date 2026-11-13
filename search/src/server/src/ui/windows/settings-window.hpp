@@ -83,6 +83,10 @@ public:
   Q_INVOKABLE void reportBug();
   Q_INVOKABLE void close();
   Q_INVOKABLE void requestDefaultFocus();
+  // Runs a builtin command by its serialized entrypoint id, so configuration
+  // actions living in the settings window behave exactly like their command
+  // counterparts (and stay in one place instead of being scattered in search).
+  Q_INVOKABLE void runCommand(const QString &entrypointId);
 
   void show();
   void hide();

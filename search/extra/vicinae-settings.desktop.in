@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=Vicinae Settings
+Name[pt_BR]=Configurações do Vicinae
+GenericName=Launcher Settings
+Comment=Configure the appearance, shortcuts and extensions of Vicinae
+Comment[pt_BR]=Configura a aparência, os atalhos e as extensões do Vicinae
+Exec=@VICINAE_CLI_EXEC@ deeplink vicinae://settings/open
+TryExec=@VICINAE_CLI_EXEC@
+Icon=vicinae
+Terminal=false
+Categories=Settings;
+Keywords=vicinae;config;settings;preferences;launcher;
+StartupNotify=false

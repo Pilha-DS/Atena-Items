@@ -23,6 +23,7 @@ Item {
 
     signal clicked
     signal activated
+    signal rightClicked
     signal dragRequested(var source)
 
     DraggableMouseArea {
@@ -57,5 +58,11 @@ Item {
     Item {
         id: contentItem
         anchors.fill: parent
+    }
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.RightButton
+        onClicked: root.rightClicked()
     }
 }

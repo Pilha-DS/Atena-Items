@@ -26,6 +26,8 @@
 #include "services/root-item-manager/root-item-manager.hpp"
 #include "ui/settings/settings-controller.hpp"
 #include "vicinae.hpp"
+#include "navigation-controller.hpp"
+#include "command/command-types.hpp"
 #include "generated/version.h"
 #include "fuzzy/fuzzy-searchable.hpp"
 #include <QDebug>
@@ -139,6 +141,12 @@ QString SettingsWindow::buildInfo() const { return QStringLiteral(BUILD_INFO); }
 QString SettingsWindow::headline() const { return Omnicast::HEADLINE; }
 
 void SettingsWindow::openUrl(const QString &url) { m_ctx.services->appDb()->openTarget(url); }
+
+void SettingsWindow::runCommand(const QString &entrypointId) {
+  auto id = EntrypointId::fromSerialized(entrypointId.toStdString());
+  if (!id.isValid()) return;
+  m_ctx.navigation->activateEntrypoint(id, {.props = {.source = LaunchSource::External}});
+}
 
 void SettingsWindow::reportBug() { openUrl(makeVicinaeBugReportUrl().toString(QUrl::FullyEncoded)); }
 

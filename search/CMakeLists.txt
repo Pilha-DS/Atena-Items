@@ -456,6 +456,13 @@ if (UNIX AND NOT APPLE)
 	set(APP_DIR ${INSTALL_SHARE}/applications)
 	make_directory(${APP_DIR})
 	install(FILES ./extra/vicinae.desktop DESTINATION ${APP_DIR})
+	# The settings entry has to point at the absolute path of the CLI: the desktop
+	# environment does not necessarily have the install bindir (e.g. ~/.local/bin) in
+	# its PATH, which makes a bare `vicinae` fail with "Failed to start app".
+	set(VICINAE_CLI_EXEC "${CMAKE_INSTALL_FULL_BINDIR}/vicinae")
+	configure_file(${CMAKE_SOURCE_DIR}/extra/vicinae-settings.desktop.in
+		${CMAKE_CURRENT_BINARY_DIR}/vicinae-settings.desktop @ONLY)
+	install(FILES ${CMAKE_CURRENT_BINARY_DIR}/vicinae-settings.desktop DESTINATION ${APP_DIR})
 	install(FILES ./extra/vicinae-url-handler.desktop DESTINATION ${APP_DIR})
 
 	set(ICON_DIR ${INSTALL_SHARE}/icons/hicolor/512x512/apps)

@@ -56,6 +56,8 @@ public:
 
   Q_INVOKABLE void toggle(bool fromClick = false);
   Q_INVOKABLE void open();
+  // QML cannot call `open()` because it collides with the `open` property.
+  Q_INVOKABLE void openPanel() { open(); }
   Q_INVOKABLE void close();
 
   void pushPanel(const QUrl &componentUrl, const QVariantMap &properties);

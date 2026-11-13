@@ -28,6 +28,8 @@
 #include <qurl.h>
 #include <set>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <unordered_set>
 #include <xdgpp/env/env.hpp>
 #include <xdgpp/mime/mime-apps-list.hpp>
@@ -331,6 +333,101 @@ bool XdgAppDatabase::openLocation(const AbstractApplication &app) const {
 
 AppPtr XdgAppDatabase::locationOpener(const AbstractApplication &app) const {
   return findDefaultOpener(QString::fromStdString(app.path()));
+}
+
+namespace {
+
+/**
+ * Flatpak exports its own desktop entries, and the packages backing them are not tracked by
+ * the distribution package manager, so they have to be removed through flatpak itself.
+ * The exported file name is the flatpak application id, e.g `org.gimp.GIMP.desktop`.
+ */
+std::optional<QString> flatpakAppIdFor(const fs::path &entry) {
+  QString const path = QString::fromStdString(entry.string());
+  if (!path.contains(QLatin1String("/flatpak/exports/share/applications/"))) return std::nullopt;
+
+  auto const id = QFileInfo(path).completeBaseName();
+  return id.isEmpty() ? std::nullopt : std::optional<QString>(id);
+}
+
+/**
+ * Returns the distribution package that installed the desktop entry, if any.
+ * This is what tells entries owned by a package apart from the ones that were installed by
+ * hand (appimages, tarballs...), which must not be removed through the package manager.
+ * This is not cheap, so it is only resolved when the application is actually removed.
+ */
+std::optional<QString> distroPackageFor(const fs::path &entry) {
+  auto const pacman = QStandardPaths::findExecutable(QStringLiteral("pacman"));
+  if (pacman.isEmpty()) return std::nullopt;
+
+  QProcess proc;
+  proc.start(pacman, {QStringLiteral("-Qoq"), QString::fromStdString(entry.string())});
+
+  if (!proc.waitForFinished(5000) || proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0)
+    return std::nullopt;
+
+  auto const pkg = QString::fromUtf8(proc.readAllStandardOutput()).trimmed();
+  return pkg.isEmpty() ? std::nullopt : std::optional<QString>(pkg);
+}
+
+/// Whether the entry lives in a location owned and writable by the current user.
+bool isUserManagedEntry(const fs::path &entry) {
+  QFileInfo const info(QString::fromStdString(entry.string()));
+  return info.isWritable() && info.absoluteFilePath().startsWith(QDir::homePath() + QLatin1Char('/'));
+}
+
+} // namespace
+
+bool XdgAppDatabase::canUninstall(const AbstractApplication &app) const {
+  // Additional actions are secondary commands that share the desktop entry of the
+  // application they belong to, so they are removed along with it.
+  if (app.isAction()) return false;
+
+  fs::path const entry = app.path();
+  std::error_code ec;
+
+  if (entry.extension() != ".desktop" || !fs::is_regular_file(entry, ec)) return false;
+
+  if (flatpakAppIdFor(entry)) return !QStandardPaths::findExecutable(QStringLiteral("flatpak")).isEmpty();
+
+  // Entries the user can write to were installed by hand, so removing the entry is up to us.
+  if (isUserManagedEntry(entry)) return true;
+
+  // Everything else lives in a read-only, system-wide directory, which means a package
+  // manager put it there. Removing the package needs to elevate privileges.
+  return !QStandardPaths::findExecutable(QStringLiteral("pacman")).isEmpty() &&
+         !QStandardPaths::findExecutable(QStringLiteral("pkexec")).isEmpty();
+}
+
+bool XdgAppDatabase::uninstall(const AbstractApplication &app) {
+  if (!canUninstall(app)) return false;
+
+  fs::path const entry = app.path();
+  QProcess proc;
+
+  // This is expected to run on a worker thread: removing a package can take a while and
+  // may prompt for a password through pkexec. See AppService::uninstall.
+  if (auto const id = flatpakAppIdFor(entry)) {
+    proc.start(QStandardPaths::findExecutable(QStringLiteral("flatpak")),
+               {QStringLiteral("uninstall"), QStringLiteral("--noninteractive"), *id});
+  } else if (auto const pkg = distroPackageFor(entry)) {
+    proc.start(QStringLiteral("pkexec"),
+               {QStandardPaths::findExecutable(QStringLiteral("pacman")), QStringLiteral("-Rns"),
+                QStringLiteral("--noconfirm"), *pkg});
+  } else {
+    // No package manager owns this entry: it was installed by hand, so removing the entry
+    // is the most that can be done without guessing which files belong to the application.
+    return QFile::moveToTrash(QString::fromStdString(entry.string()));
+  }
+
+  // Removing a package also removes the desktop entries it installed, which the app
+  // service picks up through its directory watcher.
+  if (!proc.waitForFinished(-1) || proc.exitStatus() != QProcess::NormalExit || proc.exitCode() != 0) {
+    qWarning() << "Failed to uninstall" << app.id() << ":" << proc.readAllStandardError();
+    return false;
+  }
+
+  return true;
 }
 
 std::vector<fs::path> XdgAppDatabase::defaultSearchPaths() const { return xdgpp::appDirs(); }

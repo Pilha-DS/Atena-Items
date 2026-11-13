@@ -675,6 +675,8 @@ set(SRCS
 	src/services/ai/openai/openai-compatible-provider.cpp
 	src/services/ai/openai/openai-provider.hpp
 	src/services/ai/openai/openai-provider.cpp
+	src/services/ai/deepseek/deepseek-provider.hpp
+	src/services/ai/deepseek/deepseek-provider.cpp
 	src/services/ai/groq/groq-provider.hpp
 	src/services/ai/groq/groq-provider.cpp
 	src/services/ai/llamacpp/llamacpp-provider.hpp
@@ -704,9 +706,19 @@ set(SRCS
 	src/builtins/root/root-search-model.cpp
 	src/builtins/root/root-search-sources.hpp
 	src/builtins/root/root-search-sources.cpp
+	src/builtins/iamod/iamod.hpp
+	src/builtins/iamod/iamod-actions.hpp
+	src/builtins/iamod/iamod-actions.cpp
+	src/builtins/iamod/iamod-root-section.hpp
+	src/builtins/iamod/iamod-root-section.cpp
 	src/builtins/web/web-extension.hpp
 	src/builtins/web/web-tools.hpp
 	src/builtins/web/web-tools.cpp
+	src/builtins/notes/notes-extension.hpp
+	src/builtins/notes/notes-store.hpp
+	src/builtins/notes/notes-store.cpp
+	src/builtins/notes/notes-tools.hpp
+	src/builtins/notes/notes-tools.cpp
 	src/ui/views/drag-utils.hpp
 	src/ui/views/drag-utils.cpp
 	src/ui/views/section-source.hpp
@@ -1356,6 +1368,7 @@ endif()
 set(VICINAE_QML_FILES
 	src/ui/qml/launcher/LauncherWindow.qml
 	src/ui/qml/launcher/LauncherWindowBase.qml
+	src/ui/qml/launcher/FavoritesDock.qml
 	src/ui/qml/launcher/LauncherAppearance.qml
 	src/ui/qml/launcher/LauncherStatusBar.qml
 	src/ui/qml/controls/PopupMaterial.qml
@@ -1524,11 +1537,13 @@ set(VICINAE_QML_FILES
 	src/ui/qml/settings/AppearanceSettingsPage.qml
 	src/ui/qml/settings/AdvancedSettingsPage.qml
 	src/ui/qml/settings/ShortcutsSettingsPage.qml
+	src/ui/qml/settings/ConfigurationSettingsPage.qml
 	src/ui/qml/settings/ExtensionSettingsPage.qml
 	src/ui/qml/settings/AboutSettingsPage.qml
 	src/ui/qml/settings/AISettingsPage.qml
 	src/ui/qml/settings/ToolSettingsRow.qml
 	src/ui/qml/settings/SettingsSubpageRow.qml
+	src/ui/qml/settings/SettingsActionRow.qml
 	src/ui/qml/settings/AIProvidersOverview.qml
 	src/ui/qml/settings/AIProviderPicker.qml
 	src/ui/qml/settings/AIProviderView.qml
@@ -1775,6 +1790,7 @@ qt_add_translations(${TARGET}
 		${CMAKE_CURRENT_SOURCE_DIR}/translations/vicinae_fr.ts
 		${CMAKE_CURRENT_SOURCE_DIR}/translations/vicinae_it.ts
 		${CMAKE_CURRENT_SOURCE_DIR}/translations/vicinae_pl.ts
+		${CMAKE_CURRENT_SOURCE_DIR}/translations/vicinae_pt_BR.ts
 		${CMAKE_CURRENT_SOURCE_DIR}/translations/vicinae_ru.ts
 		${CMAKE_CURRENT_SOURCE_DIR}/translations/vicinae_uk.ts
 		${CMAKE_CURRENT_SOURCE_DIR}/translations/vicinae_zh_CN.ts

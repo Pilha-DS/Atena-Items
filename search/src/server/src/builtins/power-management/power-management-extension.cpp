@@ -184,6 +184,9 @@ class SoftRebootCommand : public PowerManagementCommand {
     return tr("Soft reboot the system, which usually means only userspace is rebooted.");
   }
   std::vector<QString> keywords() const override { return {"restart"}; }
+  // A soft reboot reads almost like a plain reboot in the root search, so it stays out of
+  // the way by default. It can be re-enabled from Settings > Vicinae.
+  bool isDefaultDisabled() const override { return true; }
   bool requiresDefaultConfirmation() const override { return true; }
   ImageURL iconUrl() const override {
     return ImageURL::builtin(BuiltinIcon::RotateAntiClockwise).setBackgroundTint(SemanticColor::Cyan);
@@ -265,6 +268,12 @@ class SleepCommand : public PowerManagementCommand {
   QString id() const override { return "sleep"; }
   QString name() const override { return tr("Put System to Sleep"); }
   QString description() const override { return tr("Put system to sleep"); }
+#if !defined(Q_OS_MACOS) && !defined(Q_OS_WIN)
+  // On Linux "sleep" is the same operation as "suspend", so keeping both in the root
+  // search only produces two entries labelled the same thing. Suspend is the one that
+  // stays; this command can be re-enabled from Settings > Vicinae.
+  bool isDefaultDisabled() const override { return true; }
+#endif
   ImageURL iconUrl() const override {
     return ImageURL::builtin(BuiltinIcon::Moon).setBackgroundTint(SemanticColor::Accent);
   }
