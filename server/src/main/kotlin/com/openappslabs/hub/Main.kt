@@ -29,6 +29,7 @@ import io.ktor.server.plugins.calllogging.CallLogging
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.contentLength
 import io.ktor.server.request.path
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
@@ -78,6 +79,11 @@ private fun printBanner(config: Config, database: Database) {
     log.info("")
     log.info(" clients: server URL = http://<this-machine>:{}", config.port)
     config.publicUrl?.let { log.info(" public URL: {}", it) }
+    if (config.adminEnabled) {
+        log.info(" admin screen: /admin (login \"{}\", password from ADMIN_PASSWORD)", config.adminUser)
+    } else {
+        log.info(" admin screen: disabled (set ADMIN_USER and ADMIN_PASSWORD to enable it)")
+    }
     log.info(line)
 }
 
@@ -133,6 +139,10 @@ private fun Application.hubModule(
             call.respondText(indexPage(config, database), ContentType.Text.Html)
         }
 
+        // The admin screen is HTML and lives outside /api: it authenticates
+        // with ADMIN_USER/ADMIN_PASSWORD, not with a client token.
+        adminRoutes(config, database)
+
         route("/api/v1") {
             get("/ping") {
                 if (!call.requireToken(database)) return@get
@@ -170,9 +180,10 @@ private fun Application.hubModule(
              */
             post("/sync") {
                 if (!call.requireToken(database)) return@post
+                val bytesIn = call.request.contentLength() ?: 0L
                 val request = call.receive<SyncRequest>()
                 val remoteIp = call.request.origin.remoteHost
-                call.respond(syncService.sync(request, remoteIp))
+                call.respond(syncService.sync(request, remoteIp, call.caller(), bytesIn))
             }
 
             // Read API used by other tools (read-only consumers of the notes).
@@ -184,8 +195,16 @@ private fun Application.hubModule(
              */
             post("/tools/agenda/sync") {
                 if (!call.requireToken(database)) return@post
+                val bytesIn = call.request.contentLength() ?: 0L
                 val request = call.receive<AgendaSyncRequest>()
-                call.respond(agendaSyncService.sync(request, call.request.origin.remoteHost))
+                call.respond(
+                    agendaSyncService.sync(
+                        request,
+                        call.request.origin.remoteHost,
+                        call.caller(),
+                        bytesIn
+                    )
+                )
             }
 
             /**
@@ -194,37 +213,52 @@ private fun Application.hubModule(
              */
             post("/tools/jotter/links/sync") {
                 if (!call.requireToken(database)) return@post
+                val bytesIn = call.request.contentLength() ?: 0L
                 val request = call.receive<LinksSyncRequest>()
-                call.respond(linksSyncService.sync(request, call.request.origin.remoteHost))
+                call.respond(
+                    linksSyncService.sync(
+                        request,
+                        call.request.origin.remoteHost,
+                        call.caller(),
+                        bytesIn
+                    )
+                )
             }
         }
     }
 }
 
+private class HubTotals(val notes: Int, val links: Int, val cursor: String, val devices: Int)
+
 private fun indexPage(config: Config, database: Database): String {
     val stats = runCatching {
         database.read { connection ->
-            val notes = connection.query("SELECT COUNT(*) FROM notes") { it.getInt(1) } ?: 0
-            val cursor = connection.query(
-                "SELECT value FROM meta WHERE key = ?", Database.KEY_SEQ
-            ) { it.getString(1) } ?: "0"
-            notes to (cursor to database.devices(connection))
+            HubTotals(
+                notes = connection.query("SELECT COUNT(*) FROM notes") { it.getInt(1) } ?: 0,
+                links = connection.query("SELECT COUNT(*) FROM links") { it.getInt(1) } ?: 0,
+                cursor = connection.query(
+                    "SELECT value FROM meta WHERE key = ?", Database.KEY_SEQ
+                ) { it.getString(1) } ?: "0",
+                devices = database.devices(connection).size
+            )
         }
-    }.getOrDefault(0 to ("0" to emptyList()))
-
-    val deviceRows = stats.second.second.joinToString("") { device ->
-        val name = escapeHtml(device.name.ifBlank { "unnamed device" })
-        val seen = java.time.Instant.ofEpochMilli(device.lastSeen)
-            .atZone(java.time.ZoneId.systemDefault())
-            .format(java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"))
-        "<tr><td>$name</td><td class=\"muted\">${escapeHtml(device.lastIp)}</td><td class=\"muted\">$seen</td></tr>"
-    }.ifEmpty {
-        "<tr><td colspan=\"3\" class=\"muted\">No device has synced yet.</td></tr>"
-    }
+    }.getOrElse { HubTotals(0, 0, "0", 0) }
 
     val toolRows = Tools.all.joinToString("") { tool ->
         "<tr><td><code>${escapeHtml(tool.id)}</code></td><td>${escapeHtml(tool.name)}</td>" +
             "<td class=\"muted\">${escapeHtml(tool.description)}</td></tr>"
+    }
+
+    // The device list (names and addresses) is not public: it lives behind the
+    // admin login, so this page only shows anonymous totals.
+    val adminHtml = if (config.adminEnabled) {
+        """<h2>Administração</h2>
+        <p>Quem está sincronizando, o que cada dispositivo enviou e baixou, e os
+        tokens dos clientes ficam em <a href="/admin">/admin</a> (com login).</p>"""
+    } else {
+        """<h2>Administração</h2>
+        <p class="muted">Defina <code>ADMIN_USER</code> e <code>ADMIN_PASSWORD</code>
+        para habilitar a tela de acompanhamento em <code>/admin</code>.</p>"""
     }
 
     return """
@@ -241,6 +275,7 @@ private fun indexPage(config: Config, database: Database): String {
             code, pre { background: #24272b; border-radius: 6px; padding: 2px 6px; }
             pre { padding: 14px; overflow-x: auto; }
             h1 { font-size: 1.4rem; }
+            a { color: #8ab4f8; }
             table { border-collapse: collapse; width: 100%; }
             th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid #2c3034; }
             th { font-weight: 600; color: #9aa0a6; }
@@ -251,7 +286,9 @@ private fun indexPage(config: Config, database: Database): String {
           <main>
             <h1>Atena Hub ${BuildInfo.VERSION}</h1>
             <p class="muted">Servidor de ferramentas. Hoje o dono das notas é o Jotter.</p>
-            <p>Notas armazenadas: <strong>${stats.first}</strong> · cursor: <strong>${stats.second.first}</strong></p>
+            <p>Notas armazenadas: <strong>${stats.notes}</strong> · links:
+            <strong>${stats.links}</strong> · cursor: <strong>${stats.cursor}</strong> ·
+            dispositivos: <strong>${stats.devices}</strong></p>
 
             <h2>Ferramentas</h2>
             <table>
@@ -259,26 +296,23 @@ private fun indexPage(config: Config, database: Database): String {
               $toolRows
             </table>
 
-            <h2>Dispositivos</h2>
-            <table>
-              <tr><th>Nome</th><th>Último IP</th><th>Último sync</th></tr>
-              $deviceRows
-            </table>
+            $adminHtml
 
             <h2>Conectar um aplicativo</h2>
             <p>No app, abra <em>Configurações → Sync</em> e informe:</p>
             <pre>Server URL: ${config.publicUrl ?: "http://<esta-máquina>:${config.port}"}
 Token:      (impresso no log na inicialização)</pre>
             <p>O token fica gravado no banco do hub, então ele não muda a cada restart.
-            Para fixá-lo, use <code>ATENA_TOKEN</code>.</p>
+            Para fixá-lo, use <code>ATENA_TOKEN</code>. Tokens extras, um por cliente,
+            são criados em <code>/admin</code>.</p>
           </main>
         </body>
         </html>
     """.trimIndent()
 }
 
-/** Device names are user input, so they must not break the status page. */
-private fun escapeHtml(value: String): String = value
+/** Names and addresses are user input, so they must not break the pages. */
+internal fun escapeHtml(value: String): String = value
     .replace("&", "&amp;")
     .replace("<", "&lt;")
     .replace(">", "&gt;")

@@ -112,6 +112,69 @@ data class ErrorResponse(
 )
 
 // ---------------------------------------------------------------------------
+// Admin: the people allowed in, and what each device has been doing.
+// ---------------------------------------------------------------------------
+
+/**
+ * A token handed to one client. The secret is only present in the response
+ * that creates it; everywhere else only the prefix is shown, so a stolen
+ * database dump does not hand out working tokens by itself.
+ */
+@Serializable
+data class TokenDto(
+    val id: Long = 0L,
+    val label: String = "",
+    val prefix: String = "",
+    val createdAt: Long = 0L,
+    val revoked: Boolean = false,
+    val secret: String? = null
+)
+
+/** A sync round, as the admin screen lists it (newest first). */
+@Serializable
+data class ActivityDto(
+    val at: Long = 0L,
+    val tokenLabel: String = "",
+    val deviceId: String = "",
+    val deviceName: String = "",
+    val ip: String = "",
+    val stream: String = "",
+    val pushed: Int = 0,
+    val pulled: Int = 0,
+    val bytesIn: Long = 0L,
+    val bytesOut: Long = 0L
+)
+
+/** Totals per device, joined with its last sync. */
+@Serializable
+data class DeviceSummaryDto(
+    val id: String = "",
+    val name: String = "",
+    val ip: String = "",
+    val lastStream: String = "",
+    val lastSync: Long = 0L,
+    val tokenLabel: String = "",
+    val pushed: Int = 0,
+    val pulled: Int = 0,
+    val bytesIn: Long = 0L,
+    val bytesOut: Long = 0L,
+    val rounds: Int = 0
+)
+
+/** What one sync round did; written by the sync services, shown in the admin. */
+data class SyncActivity(
+    val stream: String,
+    val tokenLabel: String,
+    val deviceId: String,
+    val deviceName: String,
+    val ip: String,
+    val pushed: Int = 0,
+    val pulled: Int = 0,
+    val bytesIn: Long = 0L,
+    val bytesOut: Long = 0L
+)
+
+// ---------------------------------------------------------------------------
 // Agenda: events, independent of the notes contract.
 // ---------------------------------------------------------------------------
 
@@ -263,3 +326,13 @@ data class HealthResponse(
     val notes: Int = 0,
     val tools: Int = 0
 )
+
+/**
+ * The JSON the wire uses. The admin ledger measures a response with it, so both
+ * sides of the server size a payload the same way the client will decode it.
+ */
+internal val WIRE_JSON = kotlinx.serialization.json.Json {
+    ignoreUnknownKeys = true
+    encodeDefaults = true
+    explicitNulls = true
+}

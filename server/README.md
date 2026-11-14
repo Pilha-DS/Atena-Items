@@ -32,12 +32,15 @@ No log aparece o token na primeira subida:
 
 ```
 ================================================================
- Atena Hub 2.0.0 listening on 0.0.0.0:8080
+ Atena Hub 2.1.0 listening on 0.0.0.0:8080
  data file: /data/jotter-server.db
- tools: jotter 1
+ tools: jotter 2.5.0, agenda 0.1.0
 
  hub token (treat it like a password):
    3791a9b5ad4a45c7bb45534cbaa67a9c
+
+ clients: server URL = http://<this-machine>:8080
+ admin screen: /admin (login "admin", password from ADMIN_PASSWORD)
 ================================================================
 ```
 
@@ -82,8 +85,18 @@ computador — e sincroniza na hora. Deu errado? mostra o motivo e nada é salvo
 
 Depois disso a sincronização é automática: mudança local sobe em ~4 s e o app
 busca novidades a cada 5 minutos. Não há mais um botão de "ligar/desligar".
-O nome do aparelho aparece em `http://SEU-SERVIDOR/`, junto com o IP e a hora
-do último sync de cada um.
+
+Para acompanhar quem está sincronizando (e criar um token por aparelho), defina
+o login da tela de administração no `.env`:
+
+```bash
+ADMIN_USER=admin
+ADMIN_PASSWORD=uma-senha-boa
+```
+
+e abra `http://SEU-SERVIDOR/admin`. A tela lista cada aparelho, de onde ele
+conectou, quando foi o último sync e quanto enviou/baixou — e é onde ficam os
+tokens. Sem essas duas variáveis a tela não existe (responde 404).
 
 > **Celular e Linux na mesma rede:** use o IP da máquina que roda o container
 > (`hostname -I`), não `localhost`. `localhost` no celular é o próprio celular.
@@ -98,9 +111,12 @@ do último sync de cada um.
 | `ATENA_DATA_DIR` | `/data` | Diretório do banco SQLite |
 | `ATENA_TOKEN` | gerado | Token fixo (sobrepõe o do banco) |
 | `ATENA_PUBLIC_URL` | vazio | Só um texto de ajuda na página inicial |
+| `ADMIN_USER` | vazio | Usuário da tela `/admin` (junto com `ADMIN_PASSWORD` a habilita) |
+| `ADMIN_PASSWORD` | vazio | Senha da tela `/admin` |
 
 Os nomes antigos (`JOTTER_PORT`, `JOTTER_HOST_PORT`, `JOTTER_DATA_DIR`,
-`JOTTER_SERVER_TOKEN`, `JOTTER_PUBLIC_URL`) continuam funcionando.
+`JOTTER_SERVER_TOKEN`, `JOTTER_PUBLIC_URL`) continuam funcionando. Os do admin
+também aceitam o prefixo (`ATENA_ADMIN_USER`, `ATENA_ADMIN_PASSWORD`).
 
 ### Backup do servidor
 
@@ -110,6 +126,52 @@ montaria um volume vazio e pareceria que as notas sumiram). Um dump consistente:
 ```bash
 docker compose exec atena-hub sh -c 'cat /data/atena-hub.db' > atena-hub-backup.db
 ```
+
+---
+
+## Administração (`/admin`)
+
+Uma página só, HTML do servidor, sem JavaScript e sem cadastro. O login vem de
+`ADMIN_USER` e `ADMIN_PASSWORD`; se qualquer um dos dois faltar, `/admin`
+responde **404** (não existe tela com senha vazia).
+
+```bash
+ADMIN_USER=admin ADMIN_PASSWORD=uma-senha-boa docker compose up -d
+```
+
+O que a página mostra:
+
+| Bloco | Conteúdo |
+| --- | --- |
+| Cartões | dispositivos, notas, links, eventos, categorias, lixeira |
+| Dispositivos | nome, id, IP, último sync (relativo e absoluto), último stream, itens enviados/baixados, volume em KB/MB, token usado, nº de rodadas |
+| Últimas sincronizações | uma linha por sync: quando, aparelho, stream (`notas`/`links`/`agenda`), itens enviados/baixados, bytes recebidos/devolvidos, IP e token |
+| Tokens | rótulo, prefixo mascarado, data de criação, estado (ativo/revogado) e botão de revogar |
+| Novo token | cria um token para um cliente e mostra o valor **uma única vez** |
+
+### Tokens
+
+- Não existe conta de usuário para os apps: cada cliente recebe **um token** e
+  o envia em `Authorization: Bearer <token>`.
+- O token criado aparece completo só na resposta da criação. Depois disso a
+  lista mostra apenas `abcd…wxyz`; se perder, revogue e crie outro.
+- Revogar vale na hora: a próxima requisição daquele token recebe 401, sem
+  restart e sem mexer nos outros aparelhos.
+- O token do boot (`ATENA_TOKEN` ou o gerado) continua valendo e aparece na
+  lista como **master** — é o que os apps já instalados usam.
+
+### O que fica registrado
+
+Uma linha por rodada de sync, na mesma transação que aplica a mudança: o painel
+nunca mostra uma transferência que o servidor não gravou. Ficam guardados 30
+dias (limpeza automática), só com: horário, token, id/nome do aparelho, IP,
+stream, contagem de itens e bytes. **Nenhum conteúdo de nota ou link** é
+registrado.
+
+> **Use HTTPS.** Basic auth manda usuário e senha em Base64, que é apenas
+> codificação. Em rede aberta, coloque o hub atrás de um reverse proxy com TLS
+> (ou de um túnel). A página também responde `Cache-Control: no-store` e recusa
+> `POST` de outra origem (`Sec-Fetch-Site: cross-site`).
 
 ---
 
@@ -188,12 +250,17 @@ Todas as rotas `/api/*` exigem `Authorization: Bearer <token>` (ou
 | --- | --- | --- |
 | `GET` | `/health` | Liveness, sem autenticação |
 | `GET` | `/api/v1/ping` | Valida URL + token |
-| `POST` | `/api/v1/sync` | Push + pull |
+| `POST` | `/api/v1/sync` | Push + pull das notas |
 | `GET` | `/api/v1/stats` | Contadores + aparelhos que já sincronizaram |
 | `GET` | `/api/v1/tools` | Ferramentas que o hub publica (`jotter`, `agenda`) |
 | `GET` | `/api/v1/tools/jotter/notes` | Leitura das notas (busca por `q`, `category`, `limit`) |
 | `GET` | `/api/v1/tools/jotter/notes/{uuid}` | Uma nota |
+| `POST` | `/api/v1/tools/jotter/links/sync` | Push + pull dos links |
 | `POST` | `/api/v1/tools/agenda/sync` | Push + pull dos eventos da Agenda |
+| `GET` | `/admin` | Painel de acompanhamento (Basic auth de `ADMIN_USER`) |
+| `POST` | `/admin/tokens` | Cria um token (`label`) e mostra o valor uma vez |
+| `POST` | `/admin/tokens/{id}/revoke` | Revoga um token na hora |
+| `GET` | `/admin/logout` | Descarta as credenciais em cache do navegador |
 
 Exemplo:
 

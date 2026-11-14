@@ -37,7 +37,12 @@ class SyncService(private val database: Database) {
 
     private val log = LoggerFactory.getLogger(SyncService::class.java)
 
-    fun sync(request: SyncRequest, remoteIp: String = ""): SyncResponse = database.write { connection ->
+    fun sync(
+        request: SyncRequest,
+        remoteIp: String = "",
+        caller: String = "",
+        bytesIn: Long = 0L
+    ): SyncResponse = database.write { connection ->
         val sequence = Sequence(connection)
 
         // Bookkeeping only: never part of the sequence, never pulled by clients.
@@ -77,6 +82,24 @@ class SyncService(private val database: Database) {
         } else {
             log.info("sync in: pull only -> cursor {} (+{} notes)", response.cursor, response.notes.size)
         }
+
+        // One ledger line per round, in the same transaction: the admin screen
+        // shows exactly what this server committed.
+        database.recordActivity(
+            connection,
+            SyncActivity(
+                stream = STREAM,
+                tokenLabel = caller,
+                deviceId = deviceKey(request.deviceId, remoteIp),
+                deviceName = request.deviceName,
+                ip = remoteIp,
+                pushed = request.notes.size + request.deletions.size + request.categories.size,
+                pulled = response.notes.size + response.deletions.size,
+                bytesIn = bytesIn,
+                bytesOut = WIRE_JSON.encodeToString(SyncResponse.serializer(), response)
+                    .toByteArray().size.toLong()
+            )
+        )
         response
     }
 
@@ -257,6 +280,9 @@ class SyncService(private val database: Database) {
     )
 
     private companion object {
+        /** Name of this stream in the admin ledger. */
+        const val STREAM = "notes"
+
         const val SELECT_NOTE =
             "SELECT uuid, title, content, category, created_time, updated_time, is_pinned, " +
                 "is_locked, is_trashed, open_in_edit_mode, is_encrypted, encryption_salt, " +

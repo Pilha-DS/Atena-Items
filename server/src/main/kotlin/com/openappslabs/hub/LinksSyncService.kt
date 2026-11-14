@@ -38,7 +38,12 @@ class LinksSyncService(private val database: Database) {
 
     private val log = LoggerFactory.getLogger(LinksSyncService::class.java)
 
-    fun sync(request: LinksSyncRequest, remoteIp: String = ""): LinksSyncResponse =
+    fun sync(
+        request: LinksSyncRequest,
+        remoteIp: String = "",
+        caller: String = "",
+        bytesIn: Long = 0L
+    ): LinksSyncResponse =
         database.write { connection ->
             val sequence = Sequence(connection)
 
@@ -77,6 +82,22 @@ class LinksSyncService(private val database: Database) {
                     response.cursor, response.links.size
                 )
             }
+
+            database.recordActivity(
+                connection,
+                SyncActivity(
+                    stream = STREAM,
+                    tokenLabel = caller,
+                    deviceId = deviceKey(request.deviceId, remoteIp),
+                    deviceName = request.deviceName,
+                    ip = remoteIp,
+                    pushed = request.links.size + request.deletions.size,
+                    pulled = response.links.size + response.deletions.size,
+                    bytesIn = bytesIn,
+                    bytesOut = WIRE_JSON.encodeToString(LinksSyncResponse.serializer(), response)
+                        .toByteArray().size.toLong()
+                )
+            )
             response
         }
 
@@ -207,6 +228,8 @@ class LinksSyncService(private val database: Database) {
     )
 
     private companion object {
+        const val STREAM = "links"
+
         const val SELECT_LINK =
             "SELECT uuid, url, title, created_time, updated_time, last_opened_time, " +
                 "open_count FROM links"

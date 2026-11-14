@@ -4,6 +4,9 @@
 #   JOTTER_SERVER_TOKEN=e2e-test-token JOTTER_PORT=8099 ./gradlew run &
 #   BASE=http://127.0.0.1:8099 TOKEN=e2e-test-token bash docs/e2e.sh
 #
+# The admin block only runs when ADMIN_USER and ADMIN_PASSWORD are exported;
+# the server must have been started with the same two variables.
+#
 # Use a throwaway data dir: the test writes notes, deletes one and checks stats.
 set -u
 B=${BASE:-http://127.0.0.1:8099}
@@ -98,6 +101,40 @@ check "agenda deletion removes the event" "0" "$(jq_get "$r" "len([e for e in js
 # the notes stream must not see the agenda rows, and vice versa
 r=$(sync '{"cursor":0}')
 check "agenda rows stay out of the notes stream" "0" "$(jq_get "$r" "len([n for n in json.load(sys.stdin)['notes'] if n['uuid']=='$E1'])")"
+
+# ---- links: third stream, same LWW + tombstone contract -------------------
+lk() { curl -s --noproxy '*' -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$1" "$B/api/v1/tools/jotter/links/sync"; }
+
+L1="lk-$SUFFIX"
+r=$(lk "{\"cursor\":0,\"deviceId\":\"dev-$SUFFIX\",\"links\":[{\"uuid\":\"$L1\",\"url\":\"https://example.com/a\",\"title\":\"A\",\"createdTime\":1000,\"updatedTime\":2000}]}")
+check "links push creates the link" "https://example.com/a" "$(jq_get "$r" "[l for l in json.load(sys.stdin)['links'] if l['uuid']=='$L1'][0]['url']" 2>/dev/null || echo "-")"
+
+r=$(lk "{\"cursor\":0,\"links\":[{\"uuid\":\"$L1\",\"url\":\"https://example.com/old\",\"updatedTime\":1000}]}")
+check "links older push ignored (LWW)" "https://example.com/a" "$(jq_get "$r" "[l for l in json.load(sys.stdin)['links'] if l['uuid']=='$L1'][0]['url']")"
+
+r=$(lk "{\"cursor\":0,\"deletions\":[{\"uuid\":\"$L1\",\"deletedAt\":4000}]}")
+check "links deletion removes the link" "0" "$(jq_get "$r" "len([l for l in json.load(sys.stdin)['links'] if l['uuid']=='$L1'])")"
+
+# ---- admin screen: login, token creation, revoke --------------------------
+if [ -n "${ADMIN_USER:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
+  AUTH="-u $ADMIN_USER:$ADMIN_PASSWORD"
+  check "admin without login -> 401" "401" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" "$B/admin")"
+  check "admin with login -> 200" "200" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" $AUTH "$B/admin")"
+  check "admin page lists the synced device" "yes" "$(curl -s --noproxy '*' $AUTH "$B/admin" | grep -q "Tester $SUFFIX" && echo yes || echo no)"
+
+  created=$(curl -s --noproxy '*' $AUTH -X POST -d "label=e2e-$SUFFIX" "$B/admin/tokens")
+  NEWTOK=$(echo "$created" | python3 -c "import sys,re;m=re.search(r'class=\"secret\">([^<]+)<',sys.stdin.read());print(m.group(1) if m else '')")
+  check "created token has a secret" "1" "$( [ ${#NEWTOK} -ge 16 ] && echo 1 || echo 0 )"
+  check "created token authenticates" "200" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $NEWTOK" "$B/api/v1/ping")"
+
+  TID=$(curl -s --noproxy '*' $AUTH "$B/admin" | python3 -c "import sys,re;m=re.search(r'e2e-$SUFFIX.*?/admin/tokens/(\d+)/revoke',sys.stdin.read(),re.S);print(m.group(1) if m else '')")
+  check "created token is listed for revoke" "1" "$( [ -n "$TID" ] && echo 1 || echo 0 )"
+  check "revoking a token answers 200" "200" "$(curl -s --noproxy '*' $AUTH -o /dev/null -w "%{http_code}" -X POST "$B/admin/tokens/$TID/revoke")"
+  check "revoked token -> 401" "401" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $NEWTOK" "$B/api/v1/ping")"
+  check "master token still works" "200" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$B/api/v1/ping")"
+else
+  echo "SKIP  admin checks — start the server with ADMIN_USER and ADMIN_PASSWORD"
+fi
 
 # malformed body
 check "malformed JSON -> 400" "400" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cursor": nope}' "$B/api/v1/sync")"

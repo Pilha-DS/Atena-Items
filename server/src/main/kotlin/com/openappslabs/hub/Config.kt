@@ -34,14 +34,27 @@ import java.util.UUID
  *  - `ATENA_DATA_DIR` / `JOTTER_DATA_DIR`    where the SQLite file lives
  *  - `ATENA_TOKEN` / `JOTTER_SERVER_TOKEN`   fixed token; otherwise generated
  *  - `ATENA_PUBLIC_URL` / `JOTTER_PUBLIC_URL` shown on the start page
+ *  - `ADMIN_USER` / `ADMIN_PASSWORD`         credentials of the admin screen
+ *
+ * The admin screen is the only place with a login. Regular clients keep using a
+ * token: no accounts, no sessions, nothing to manage on their side.
  */
 data class Config(
     val port: Int,
     val host: String,
     val dataDir: Path,
     val tokenOverride: String?,
-    val publicUrl: String?
+    val publicUrl: String?,
+    val adminUser: String? = null,
+    val adminPassword: String? = null
 ) {
+    /**
+     * The admin screen only exists when both credentials are configured.
+     * Without them `/admin` answers 404, so a deployment that never set the
+     * variables does not expose a login form with a guessable password.
+     */
+    val adminEnabled: Boolean
+        get() = !adminUser.isNullOrBlank() && !adminPassword.isNullOrBlank()
     /**
      * The hub keeps one SQLite file. A deployment that already has
      * `jotter-server.db` keeps using it, so upgrading the image never looks
@@ -71,7 +84,9 @@ data class Config(
                 host = value("ATENA_HOST", "JOTTER_HOST") ?: "0.0.0.0",
                 dataDir = Paths.get(value("ATENA_DATA_DIR", "JOTTER_DATA_DIR") ?: "/data"),
                 tokenOverride = value("ATENA_TOKEN", "JOTTER_SERVER_TOKEN"),
-                publicUrl = value("ATENA_PUBLIC_URL", "JOTTER_PUBLIC_URL")
+                publicUrl = value("ATENA_PUBLIC_URL", "JOTTER_PUBLIC_URL"),
+                adminUser = value("ADMIN_USER", "ATENA_ADMIN_USER"),
+                adminPassword = value("ADMIN_PASSWORD", "ATENA_ADMIN_PASSWORD")
             )
         }
     }
@@ -80,7 +95,7 @@ data class Config(
 /** Build-time identity, shown by `/health`, `/api/v1/ping` and the start page. */
 object BuildInfo {
     const val NAME = "atena-hub"
-    const val VERSION = "2.0.0"
+    const val VERSION = "2.1.0"
 }
 
 internal fun newToken(): String = UUID.randomUUID().toString().replace("-", "")

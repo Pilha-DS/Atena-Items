@@ -37,7 +37,12 @@ class AgendaSyncService(private val database: Database) {
 
     private val log = LoggerFactory.getLogger(AgendaSyncService::class.java)
 
-    fun sync(request: AgendaSyncRequest, remoteIp: String = ""): AgendaSyncResponse =
+    fun sync(
+        request: AgendaSyncRequest,
+        remoteIp: String = "",
+        caller: String = "",
+        bytesIn: Long = 0L
+    ): AgendaSyncResponse =
         database.write { connection ->
             val sequence = Sequence(connection)
 
@@ -76,6 +81,22 @@ class AgendaSyncService(private val database: Database) {
                     response.cursor, response.events.size
                 )
             }
+
+            database.recordActivity(
+                connection,
+                SyncActivity(
+                    stream = STREAM,
+                    tokenLabel = caller,
+                    deviceId = deviceKey(request.deviceId, remoteIp),
+                    deviceName = request.deviceName,
+                    ip = remoteIp,
+                    pushed = request.events.size + request.deletions.size,
+                    pulled = response.events.size + response.deletions.size,
+                    bytesIn = bytesIn,
+                    bytesOut = WIRE_JSON.encodeToString(AgendaSyncResponse.serializer(), response)
+                        .toByteArray().size.toLong()
+                )
+            )
             response
         }
 
@@ -212,6 +233,8 @@ class AgendaSyncService(private val database: Database) {
     )
 
     private companion object {
+        const val STREAM = "agenda"
+
         const val SELECT_EVENT =
             "SELECT uuid, title, description, location, start_time, end_time, is_all_day, " +
                 "color, created_time, updated_time FROM agenda_events"

@@ -40,6 +40,10 @@ class Database(private val file: Path) {
     @Volatile
     private var token: String = ""
 
+    /** Last time the activity ledger was trimmed, so it is not done per sync. */
+    @Volatile
+    private var lastPurge: Long = 0L
+
     /** Creates the schema when needed and resolves the sync token. */
     fun init(tokenOverride: String?) {
         file.toAbsolutePath().parent?.let { Files.createDirectories(it) }
@@ -61,7 +65,11 @@ class Database(private val file: Path) {
                     generated
                 }
             }
-            setMeta(connection, KEY_CREATED, System.currentTimeMillis().toString())
+            // The first boot is the "birth" of this database; it labels the
+            // master token in the admin screen, so a restart does not reset it.
+            if (meta(connection, KEY_CREATED) == null) {
+                setMeta(connection, KEY_CREATED, System.currentTimeMillis().toString())
+            }
             val removed = purgeOldTombstones(connection)
             if (removed > 0) log.info("purged {} tombstones older than {} days", removed, TOMBSTONE_DAYS)
         }
@@ -70,14 +78,33 @@ class Database(private val file: Path) {
 
     fun authToken(): String = token
 
-    /** Constant-time comparison, so a wrong token cannot be probed byte by byte. */
-    fun tokenMatches(provided: String?): Boolean {
+    /** Constant-time check of the boot token, so it cannot be probed byte by byte. */
+    private fun matchesMaster(provided: String?): Boolean {
         val expected = token
         if (provided == null || expected.isEmpty() || provided.length != expected.length) return false
         var diff = 0
         for (i in provided.indices) diff = diff or (provided[i].code xor expected[i].code)
         return diff == 0
     }
+
+    /**
+     * Resolves the token a client presented to a label: [MASTER_LABEL] for the
+     * token printed at boot, the label the admin typed for one created in the
+     * admin screen, and `null` when it is wrong or was revoked. A revoked token
+     * stops working on the very next request — no restart needed.
+     */
+    fun tokenLabel(provided: String?): String? {
+        val candidate = provided?.trim()
+        if (candidate.isNullOrEmpty()) return null
+        if (matchesMaster(candidate)) return MASTER_LABEL
+        return read { connection ->
+            connection.query(
+                "SELECT label FROM tokens WHERE token = ? AND revoked = 0", candidate
+            ) { it.getString(1) ?: "" }
+        }
+    }
+
+    fun tokenMatches(provided: String?): Boolean = tokenLabel(provided) != null
 
     fun <T> read(block: (Connection) -> T): T = open().use(block)
 
@@ -209,7 +236,33 @@ class Database(private val file: Path) {
                 last_seen INTEGER NOT NULL,
                 last_ip TEXT NOT NULL DEFAULT ''
             )
-            """.trimIndent()
+            """.trimIndent(),
+            """
+            CREATE TABLE IF NOT EXISTS tokens (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                label TEXT NOT NULL DEFAULT '',
+                token TEXT NOT NULL UNIQUE,
+                created_at INTEGER NOT NULL,
+                revoked INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent(),
+            """
+            CREATE TABLE IF NOT EXISTS activity (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                at INTEGER NOT NULL,
+                token_label TEXT NOT NULL DEFAULT '',
+                device_id TEXT NOT NULL DEFAULT '',
+                device_name TEXT NOT NULL DEFAULT '',
+                ip TEXT NOT NULL DEFAULT '',
+                stream TEXT NOT NULL DEFAULT '',
+                pushed INTEGER NOT NULL DEFAULT 0,
+                pulled INTEGER NOT NULL DEFAULT 0,
+                bytes_in INTEGER NOT NULL DEFAULT 0,
+                bytes_out INTEGER NOT NULL DEFAULT 0
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_activity_at ON activity (at)",
+            "CREATE INDEX IF NOT EXISTS index_activity_device ON activity (device_id)"
         )
         connection.createStatement().use { statement ->
             statements.forEach(statement::execute)
@@ -222,7 +275,7 @@ class Database(private val file: Path) {
      * an empty name keeps the previous one, so older clients do not blank it.
      */
     fun recordDevice(connection: Connection, id: String, name: String, ip: String) {
-        val key = id.trim().ifEmpty { "ip:$ip" }.take(128)
+        val key = deviceKey(id, ip)
         val cleanName = name.trim().take(64)
         connection.execute(
             "INSERT INTO devices(id, name, last_seen, last_ip) VALUES(?,?,?,?) " +
@@ -236,6 +289,149 @@ class Database(private val file: Path) {
     fun devices(connection: Connection): List<DeviceDto> = connection.queryList(
         "SELECT id, name, last_seen, last_ip FROM devices ORDER BY last_seen DESC LIMIT 50"
     ) { DeviceDto(it.getString(1), it.getString(2), it.getLong(3), it.getString(4)) }
+
+    // ---------------------------------------------------------------------
+    // Tokens created by the admin
+    // ---------------------------------------------------------------------
+
+    /** Creates a token for one more client and returns the secret to show once. */
+    fun createToken(label: String): TokenDto {
+        val cleanLabel = label.trim().take(64).ifEmpty { "sem nome" }
+        val secret = newToken()
+        val createdAt = System.currentTimeMillis()
+        write { connection ->
+            connection.execute(
+                "INSERT INTO tokens(label, token, created_at, revoked) VALUES(?,?,?,0)",
+                cleanLabel, secret, createdAt
+            )
+        }
+        log.info("token created for \"{}\"", cleanLabel)
+        return TokenDto(
+            id = 0,
+            label = cleanLabel,
+            prefix = mask(secret),
+            createdAt = createdAt,
+            revoked = false,
+            secret = secret
+        )
+    }
+
+    fun revokeToken(id: Long): Boolean = write { connection ->
+        connection.execute("UPDATE tokens SET revoked = 1 WHERE id = ?", id) > 0
+    }
+
+    fun tokens(connection: Connection): List<TokenDto> = connection.queryList(
+        "SELECT id, label, token, created_at, revoked FROM tokens ORDER BY created_at DESC"
+    ) {
+        TokenDto(
+            id = it.getLong(1),
+            label = it.getString(2),
+            prefix = mask(it.getString(3)),
+            createdAt = it.getLong(4),
+            revoked = it.getInt(5) != 0
+        )
+    }
+
+    /**
+     * The boot token, shown in the admin screen like any other: the admin needs
+     * it to configure a client, and the page is already behind the login.
+     */
+    fun masterTokenDto(connection: Connection): TokenDto = TokenDto(
+        id = 0,
+        label = MASTER_LABEL,
+        prefix = mask(token),
+        createdAt = connection.query(
+            "SELECT value FROM meta WHERE key = ?", KEY_CREATED
+        ) { it.getString(1)?.toLongOrNull() } ?: 0L,
+        revoked = false,
+        secret = token
+    )
+
+    // ---------------------------------------------------------------------
+    // Activity: who talked to the hub, what they sent and what they got
+    // ---------------------------------------------------------------------
+
+    /**
+     * One line per sync round. Written inside the sync transaction, so the
+     * dashboard never shows a transfer the server did not commit.
+     */
+    fun recordActivity(connection: Connection, entry: SyncActivity) {
+        connection.execute(
+            "INSERT INTO activity(at, token_label, device_id, device_name, ip, stream, " +
+                "pushed, pulled, bytes_in, bytes_out) VALUES(?,?,?,?,?,?,?,?,?,?)",
+            System.currentTimeMillis(), entry.tokenLabel.take(64),
+            entry.deviceId.take(128), entry.deviceName.take(64), entry.ip.take(64),
+            entry.stream, entry.pushed, entry.pulled, entry.bytesIn, entry.bytesOut
+        )
+        purgeOldActivity(connection)
+    }
+
+    fun recentActivity(connection: Connection, limit: Int = 60): List<ActivityDto> =
+        connection.queryList(
+            "SELECT at, token_label, device_id, device_name, ip, stream, pushed, pulled, " +
+                "bytes_in, bytes_out FROM activity ORDER BY at DESC, id DESC LIMIT ?",
+            limit
+        ) {
+            ActivityDto(
+                at = it.getLong(1),
+                tokenLabel = it.getString(2),
+                deviceId = it.getString(3),
+                deviceName = it.getString(4),
+                ip = it.getString(5),
+                stream = it.getString(6),
+                pushed = it.getInt(7),
+                pulled = it.getInt(8),
+                bytesIn = it.getLong(9),
+                bytesOut = it.getLong(10)
+            )
+        }
+
+    /**
+     * One row per device: when it last synced, on which stream, how much it
+     * sent and received in total, and which token it used last.
+     */
+    fun deviceSummaries(connection: Connection): List<DeviceSummaryDto> =
+        connection.queryList(
+            """
+            SELECT d.id, d.name, d.last_ip, a.stream, a.at, a.token_label,
+                   s.pushed, s.pulled, s.bytes_in, s.bytes_out, s.rounds
+            FROM devices d
+            LEFT JOIN activity a ON a.id = (
+                SELECT id FROM activity WHERE device_id = d.id ORDER BY id DESC LIMIT 1
+            )
+            LEFT JOIN (
+                SELECT device_id, SUM(pushed) AS pushed, SUM(pulled) AS pulled,
+                       SUM(bytes_in) AS bytes_in, SUM(bytes_out) AS bytes_out, COUNT(*) AS rounds
+                FROM activity GROUP BY device_id
+            ) s ON s.device_id = d.id
+            ORDER BY COALESCE(a.at, d.last_seen) DESC
+            LIMIT 100
+            """.trimIndent()
+        ) {
+            DeviceSummaryDto(
+                id = it.getString(1),
+                name = it.getString(2),
+                ip = it.getString(3),
+                lastStream = it.getString(4) ?: "",
+                lastSync = it.getLong(5),
+                tokenLabel = it.getString(6) ?: "",
+                pushed = it.getInt(7),
+                pulled = it.getInt(8),
+                bytesIn = it.getLong(9),
+                bytesOut = it.getLong(10),
+                rounds = it.getInt(11)
+            )
+        }
+
+    /** Keeps the ledger bounded: it is a dashboard, not an audit trail. */
+    private fun purgeOldActivity(connection: Connection) {
+        val now = System.currentTimeMillis()
+        if (now - lastPurge < PURGE_INTERVAL_MS) return
+        lastPurge = now
+        val cutoff = now - ACTIVITY_DAYS * 24L * 60L * 60L * 1000L
+        val removed = connection.execute("DELETE FROM activity WHERE at < ?", cutoff)
+        if (removed > 0) log.info("purged {} activity rows older than {} days", removed, ACTIVITY_DAYS)
+    }
 
     private fun purgeOldTombstones(connection: Connection): Int {
         val cutoff = System.currentTimeMillis() - TOMBSTONE_DAYS * 24L * 60L * 60L * 1000L
@@ -275,10 +471,28 @@ class Database(private val file: Path) {
 
         /** The link inbox is a third stream, with its own cursor. */
         const val KEY_LINKS_SEQ = "links_sync_seq"
+
+        /** Label that identifies the token printed at boot in the admin screen. */
+        const val MASTER_LABEL = "master"
+
         private const val KEY_CREATED = "created_at"
         private const val TOMBSTONE_DAYS = 180L
+        private const val ACTIVITY_DAYS = 30L
+        private const val PURGE_INTERVAL_MS = 60L * 60L * 1000L
     }
 }
+
+/** A secret is never printed whole: the admin screen shows these. */
+internal fun mask(secret: String): String = when {
+    secret.length <= 8 -> "••••"
+    else -> secret.take(4) + "…" + secret.takeLast(4)
+}
+
+/**
+ * The key a device is known by. A client that sends no id still shows up, keyed
+ * by its address, so the dashboard can list it instead of hiding the traffic.
+ */
+internal fun deviceKey(id: String, ip: String): String = id.trim().ifEmpty { "ip:$ip" }.take(128)
 
 /** Small JDBC helpers, kept local to the server. */
 internal fun Connection.execute(sql: String, vararg args: Any?): Int =

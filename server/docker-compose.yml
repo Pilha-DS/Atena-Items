@@ -1,7 +1,7 @@
 services:
   atena-hub:
     build: .
-    image: atena-hub:2.0.0
+    image: atena-hub:2.1.0
     container_name: atena-hub
     restart: unless-stopped
     ports:
@@ -15,6 +15,11 @@ services:
       ATENA_TOKEN: ${ATENA_TOKEN:-}
       # Optional, only used as a hint on the start page.
       ATENA_PUBLIC_URL: ${ATENA_PUBLIC_URL:-}
+      # Admin screen (/admin): who is syncing, how much each device sends and
+      # receives, and the tokens for the clients. Without both variables the
+      # screen does not exist (404).
+      ADMIN_USER: ${ADMIN_USER:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     volumes:
       # The database lives here. Back this volume up; it is your server copy.
       #
