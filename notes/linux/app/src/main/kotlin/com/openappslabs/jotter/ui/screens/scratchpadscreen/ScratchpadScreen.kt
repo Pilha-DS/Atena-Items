@@ -134,6 +134,22 @@ fun ScratchpadScreen(
         ScratchpadSaver.submit(id, text)
     }
 
+    // Text written on another device reaches this row as a plain database
+    // update, so the open window follows the row instead of the snapshot it
+    // read at startup. It is adopted only when nothing typed here is waiting to
+    // be written: an unfinished local edit is never replaced.
+    LaunchedEffect(loaded, noteId) {
+        if (!loaded || noteId == null) return@LaunchedEffect
+        AppGraph.notesRepository.observeScratchpad().collect { note ->
+            val incoming = note?.content ?: return@collect
+            if (incoming == text) return@collect
+            if (!ScratchpadSaver.isPersisted(text)) return@collect
+            text = incoming
+            ScratchpadSaver.markPersisted(incoming)
+            Diagnostics.log("scratchpad updated by sync (${incoming.length} chars)")
+        }
+    }
+
     // Hiding the widget, quitting or logging out must never lose the last words
     // typed: this flush waits for the write to actually reach SQLite.
     DisposableEffect(noteId) {

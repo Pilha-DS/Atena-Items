@@ -80,6 +80,12 @@ interface NotesRepository {
      */
     suspend fun getOrCreateScratchpad(): Note
 
+    /**
+     * The same row, observed. The open window follows it so text pulled from
+     * the hub shows up without closing and reopening the note.
+     */
+    fun observeScratchpad(): Flow<Note?>
+
     /** Saves the scratchpad text. It has no title, so only `content` changes. */
     suspend fun saveScratchpad(noteId: Int, content: String)
 }

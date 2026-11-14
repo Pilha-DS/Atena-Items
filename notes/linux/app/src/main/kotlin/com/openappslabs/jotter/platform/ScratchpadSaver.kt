@@ -127,8 +127,19 @@ object ScratchpadSaver {
      */
     fun markPersisted(text: String) {
         persisted.set(text)
-        if (text.isNotBlank()) lastNonBlank.set(text)
+        if (text.isNotBlank()) {
+            lastNonBlank.set(text)
+            // The mirror follows whatever the database holds, so text that
+            // arrived by sync is also recoverable if the file is ever wiped.
+            ScratchpadRecovery.remember(text)
+        }
     }
+
+    /**
+     * True when [text] is exactly what the database holds and nothing newer is
+     * waiting to be written: the buffer has no unsaved edits.
+     */
+    fun isPersisted(text: String): Boolean = persisted.get() == text && pending.get() == null
 
     /**
      * Writes [text] and waits (bounded) for it to reach SQLite, then

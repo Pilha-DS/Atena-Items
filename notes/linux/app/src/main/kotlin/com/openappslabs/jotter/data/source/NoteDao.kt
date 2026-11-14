@@ -133,6 +133,14 @@ interface NoteDao {
     @Query("SELECT * FROM notes WHERE isScratchpad = 1 ORDER BY id ASC LIMIT 1")
     suspend fun getScratchpad(): Note?
 
+    /**
+     * The same row, observed: a sync round can replace the text under an open
+     * window, and the window has to show what arrived instead of the copy it
+     * read at startup.
+     */
+    @Query("SELECT * FROM notes WHERE isScratchpad = 1 ORDER BY id ASC LIMIT 1")
+    fun observeScratchpad(): Flow<Note?>
+
     /** Only touches the text: it has no title, category or timestamp to show. */
     @Query("UPDATE notes SET content = :content, updatedTime = :updatedTime, needsSync = 1 WHERE id = :noteId")
     suspend fun updateScratchpadContent(noteId: Int, content: String, updatedTime: Long)

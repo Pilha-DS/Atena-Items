@@ -231,6 +231,8 @@ class NotesRepositoryImpl(
         return noteDao.getNoteById(id) ?: draft.copy(id = id)
     }
 
+    override fun observeScratchpad(): Flow<Note?> = noteDao.observeScratchpad()
+
     override suspend fun saveScratchpad(noteId: Int, content: String) {
         noteDao.updateScratchpadContent(
             noteId = noteId,
