@@ -19,6 +19,7 @@ import org.fossify.calendar.extensions.maybeAdjustRepeatLimitCount
 import org.fossify.calendar.extensions.scheduleNextEventReminder
 import org.fossify.calendar.extensions.seconds
 import org.fossify.calendar.extensions.updateWidgets
+import org.fossify.calendar.jobs.AgendaSyncWorker
 import org.fossify.calendar.models.CalendarEntity
 import org.fossify.calendar.models.Event
 import org.fossify.commons.extensions.getProperPrimaryColor
@@ -160,6 +161,7 @@ class EventsHelper(val context: Context) {
         ensureCalendarVisibility(event, enableCalendar)
         if (updateWidgets) context.updateWidgets()
         context.scheduleNextEventReminder(event, showToasts)
+        AgendaSyncWorker.syncSoon(context)
 
         if (addToCalDAV && config.caldavSync && event.source != SOURCE_SIMPLE_CALENDAR && event.source != SOURCE_IMPORTED_ICS) {
             context.calDAVHelper.insertCalDAVEvent(event, eventOccurrenceTS)
@@ -199,6 +201,7 @@ class EventsHelper(val context: Context) {
         } finally {
             context.updateWidgets()
         }
+        AgendaSyncWorker.syncSoon(context)
     }
 
     fun updateEvent(
@@ -223,6 +226,7 @@ class EventsHelper(val context: Context) {
         if (updateAtCalDAV && event.source != SOURCE_SIMPLE_CALENDAR && config.caldavSync) {
             context.calDAVHelper.updateCalDAVEvent(event)
         }
+        AgendaSyncWorker.syncSoon(context)
         callback?.invoke()
     }
 
@@ -370,6 +374,7 @@ class EventsHelper(val context: Context) {
             deleteChildEvents(it as MutableList<Long>, deleteFromCalDAV, updateWidgets)
             if (updateWidgets) context.updateWidgets()
         }
+        AgendaSyncWorker.syncSoon(context)
     }
 
     private fun deleteChildEvents(

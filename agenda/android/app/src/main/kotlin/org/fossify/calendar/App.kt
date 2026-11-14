@@ -1,6 +1,7 @@
 package org.fossify.calendar
 
 import org.fossify.calendar.extensions.hasDummyAlarm
+import org.fossify.calendar.jobs.AgendaSyncWorker
 import org.fossify.calendar.jobs.AppStartupWorker
 import org.fossify.commons.FossifyApp
 
@@ -10,5 +11,6 @@ class App : FossifyApp() {
         if (!hasDummyAlarm()) {
             AppStartupWorker.start(this)
         }
+        AgendaSyncWorker.schedulePeriodic(this)
     }
 }

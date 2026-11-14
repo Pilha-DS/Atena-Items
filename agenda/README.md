@@ -18,6 +18,14 @@ cd linux && ./scripts/install.sh
 
 Os dois lados conversam pelo **Atena Hub** (`server/`): o app sincroniza os eventos via `POST /api/v1/tools/agenda/sync`, com last-write-wins no `updatedTime`. Detalhes em [`linux/README.md`](linux/README.md) e no [README principal](../README.md).
 
+## Sincronização
+
+A sincronização é opcional e configurada dentro do app, em **Ajustes → Sincronização** (Android) e **Ajustes → Sincronização** (desktop): URL do hub e token de acesso. Sem servidor configurado, tudo funciona e fica no banco local.
+
+- O app envia os eventos locais e puxa os remotos em `POST /api/v1/tools/agenda/sync`, com cursor próprio da Agenda e last-write-wins no `updatedTime`.
+- No Android o envio é disparado pelas edições (com debounce), a cada 30 minutos e pelo botão **Salvar e sincronizar**.
+- Ficam de fora os eventos recorrentes, as ocorrências filhas, as tarefas e os eventos de calendários CalDAV ou importados de ICS: esses já têm o próprio mecanismo de sync, e o hub não representa recorrência.
+
 ## Licença
 
 GPL-3.0-or-later, a mesma do Fossify Calendar. Veja [`android/LICENSE`](android/LICENSE) e os créditos no [README principal](../README.md).

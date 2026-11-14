@@ -3,6 +3,7 @@ package org.fossify.calendar.helpers
 import android.content.Context
 import android.media.AudioManager
 import android.media.RingtoneManager
+import android.os.Build
 import org.fossify.calendar.R
 import org.fossify.calendar.extensions.config
 import org.fossify.calendar.extensions.scheduleCalDAVSync
@@ -10,6 +11,7 @@ import org.fossify.commons.extensions.getDefaultAlarmTitle
 import org.fossify.commons.helpers.BaseConfig
 import org.fossify.commons.helpers.DAY_MINUTES
 import org.fossify.commons.helpers.YEAR_SECONDS
+import java.util.UUID
 
 class Config(context: Context) : BaseConfig(context) {
     companion object {
@@ -153,6 +155,55 @@ class Config(context: Context) : BaseConfig(context) {
     var caldavSyncedCalendarIds: String
         get() = prefs.getString(CALDAV_SYNCED_CALENDAR_IDS, "")!!
         set(calendarIDs) = prefs.edit().putString(CALDAV_SYNCED_CALENDAR_IDS, calendarIDs).apply()
+
+    /**
+     * Atena Hub: the sync is off while there is no URL and token, and the
+     * events keep working locally, exactly like before the feature existed.
+     */
+    var agendaSyncUrl: String
+        get() = prefs.getString(AGENDA_SYNC_URL, "")!!
+        set(url) = prefs.edit().putString(AGENDA_SYNC_URL, url.trim()).apply()
+
+    var agendaSyncToken: String
+        get() = prefs.getString(AGENDA_SYNC_TOKEN, "")!!
+        set(token) = prefs.edit().putString(AGENDA_SYNC_TOKEN, token.trim()).apply()
+
+    var agendaSyncDeviceName: String
+        get() = prefs.getString(AGENDA_SYNC_DEVICE_NAME, "")!!.ifEmpty { Build.MODEL ?: "" }
+        set(name) = prefs.edit().putString(AGENDA_SYNC_DEVICE_NAME, name.trim()).apply()
+
+    /** Stable per-install id, so renaming the device keeps its history. */
+    val agendaSyncDeviceId: String
+        get() {
+            val stored = prefs.getString(AGENDA_SYNC_DEVICE_ID, "")!!
+            if (stored.isNotEmpty()) {
+                return stored
+            }
+            val generated = UUID.randomUUID().toString()
+            prefs.edit().putString(AGENDA_SYNC_DEVICE_ID, generated).apply()
+            return generated
+        }
+
+    var agendaSyncCursor: Long
+        get() = prefs.getLong(AGENDA_SYNC_CURSOR, 0L)
+        set(cursor) = prefs.edit().putLong(AGENDA_SYNC_CURSOR, cursor).apply()
+
+    var agendaSyncLastAt: Long
+        get() = prefs.getLong(AGENDA_SYNC_LAST_AT, 0L)
+        set(syncedAt) = prefs.edit().putLong(AGENDA_SYNC_LAST_AT, syncedAt).apply()
+
+    val agendaSyncConfigured: Boolean
+        get() = agendaSyncUrl.isNotEmpty() && agendaSyncToken.isNotEmpty()
+
+    /** Forgets the server and the token; the device id survives a reconnect. */
+    fun clearAgendaSync() {
+        prefs.edit()
+            .remove(AGENDA_SYNC_URL)
+            .remove(AGENDA_SYNC_TOKEN)
+            .remove(AGENDA_SYNC_CURSOR)
+            .remove(AGENDA_SYNC_LAST_AT)
+            .apply()
+    }
 
     var lastUsedCaldavCalendarId: Int
         get() = prefs.getInt(

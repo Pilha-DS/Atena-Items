@@ -15,6 +15,9 @@ import org.fossify.calendar.interfaces.CalendarsDao
 import org.fossify.calendar.interfaces.EventsDao
 import org.fossify.calendar.interfaces.TasksDao
 import org.fossify.calendar.interfaces.WidgetsDao
+import org.fossify.calendar.interfaces.AgendaSyncDao
+import org.fossify.calendar.models.AgendaSyncEvent
+import org.fossify.calendar.models.AgendaSyncTombstone
 import org.fossify.calendar.models.CalendarEntity
 import org.fossify.calendar.models.Event
 import org.fossify.calendar.models.Task
@@ -23,8 +26,15 @@ import org.fossify.commons.extensions.getProperPrimaryColor
 import java.util.concurrent.Executors
 
 @Database(
-    entities = [Event::class, CalendarEntity::class, Widget::class, Task::class],
-    version = 11
+    entities = [
+        Event::class,
+        CalendarEntity::class,
+        Widget::class,
+        Task::class,
+        AgendaSyncEvent::class,
+        AgendaSyncTombstone::class
+    ],
+    version = 12
 )
 @TypeConverters(Converters::class)
 abstract class EventsDatabase : RoomDatabase() {
@@ -36,6 +46,8 @@ abstract class EventsDatabase : RoomDatabase() {
     abstract fun WidgetsDao(): WidgetsDao
 
     abstract fun TasksDao(): TasksDao
+
+    abstract fun AgendaSyncDao(): AgendaSyncDao
 
     companion object {
         private var db: EventsDatabase? = null
@@ -65,6 +77,7 @@ abstract class EventsDatabase : RoomDatabase() {
                             .addMigrations(MIGRATION_8_9)
                             .addMigrations(MIGRATION_9_10)
                             .addMigrations(MIGRATION_10_11)
+                            .addMigrations(MIGRATION_11_12)
                             .build()
                         db!!.openHelper.setWriteAheadLoggingEnabled(true)
                     }
@@ -179,6 +192,35 @@ abstract class EventsDatabase : RoomDatabase() {
                 database.apply {
                     execSQL("ALTER TABLE widgets ADD COLUMN header INTEGER NOT NULL DEFAULT 1")
                     execSQL("ALTER TABLE events ADD COLUMN access_level INTEGER NOT NULL DEFAULT 0")
+                }
+            }
+        }
+
+        /**
+         * Atena Hub sync. Both tables are new and additive: the events table and
+         * all existing data are left untouched.
+         */
+        @Suppress("MagicNumber")
+        private val MIGRATION_11_12 = object : Migration(11, 12) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.apply {
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `agenda_sync_events` (" +
+                            "`event_id` INTEGER NOT NULL, " +
+                            "`uuid` TEXT NOT NULL, " +
+                            "`synced_time` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`event_id`))"
+                    )
+                    execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_agenda_sync_events_uuid` " +
+                            "ON `agenda_sync_events` (`uuid`)"
+                    )
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `agenda_sync_tombstones` (" +
+                            "`uuid` TEXT NOT NULL, " +
+                            "`deleted_at` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`uuid`))"
+                    )
                 }
             }
         }

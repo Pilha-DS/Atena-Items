@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <uses-permission android:name="android.permission.READ_CALENDAR" />
     <uses-permission android:name="android.permission.WRITE_CALENDAR" />
+    <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
@@ -210,6 +211,13 @@
             android:configChanges="orientation"
             android:exported="false"
             android:label="@string/event_types"
+            android:parentActivityName=".activities.SettingsActivity" />
+
+        <activity
+            android:name=".activities.AgendaSyncActivity"
+            android:configChanges="orientation"
+            android:exported="false"
+            android:label="@string/agenda_sync"
             android:parentActivityName=".activities.SettingsActivity" />
 
         <activity

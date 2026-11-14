@@ -230,6 +230,26 @@
     <string name="manage_quick_filter_event_types">Manage quick filter calendars</string>
     <string name="allow_creating_tasks">Allow creating tasks</string>
 
+    <!-- Atena Hub sync -->
+    <string name="agenda_sync">Atena Hub sync</string>
+    <string name="agenda_sync_description">Sync your local events with your Atena Hub. Leave the fields empty to keep everything on this device.</string>
+    <string name="agenda_sync_url_hint">Server URL</string>
+    <string name="agenda_sync_token_hint">Access token</string>
+    <string name="agenda_sync_device_hint">Device name</string>
+    <string name="agenda_sync_save">Save and sync now</string>
+    <string name="agenda_sync_disconnect">Disconnect</string>
+    <string name="agenda_sync_missing_fields">Fill in the server URL and the token</string>
+    <string name="agenda_sync_not_configured">Not connected. Events stay on this device.</string>
+    <string name="agenda_sync_never_synced">Ready to sync.</string>
+    <string name="agenda_sync_last_sync">Last sync: %s</string>
+    <string name="agenda_sync_running">Syncing…</string>
+    <string name="agenda_sync_result">Sync finished: %1$d sent, %2$d received.</string>
+    <string name="agenda_sync_error_unauthorized">The server rejected the token. Generate a new one in the hub.</string>
+    <string name="agenda_sync_error_network">Could not reach the server. Check the URL and your connection.</string>
+    <string name="agenda_sync_error_server">The server returned an error: %s</string>
+    <string name="agenda_sync_error_invalid_response">The server response could not be read.</string>
+    <string name="agenda_sync_disconnect_confirmation">Disconnect from the Atena Hub? The events already on this device are kept.</string>
+
     <!-- CalDAV sync -->
     <string name="caldav">CalDAV</string>
     <string name="select_caldav_calendars">Select calendars to sync</string>

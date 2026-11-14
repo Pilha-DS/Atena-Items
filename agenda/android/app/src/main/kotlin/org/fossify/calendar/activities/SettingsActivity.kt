@@ -206,6 +206,7 @@ class SettingsActivity : SimpleActivity() {
         setupSnoozeTime()
         setupCaldavSync()
         setupManageSyncedCalendars()
+        setupAgendaSync()
         setupDefaultStartTime()
         setupDefaultDuration()
         setupDefaultCalendar()
@@ -394,6 +395,12 @@ class SettingsActivity : SimpleActivity() {
         settingsManageSyncedCalendarsHolder.beVisibleIf(config.caldavSync)
         settingsManageSyncedCalendarsHolder.setOnClickListener {
             showCalendarPicker()
+        }
+    }
+
+    private fun setupAgendaSync() = binding.apply {
+        settingsAgendaSyncHolder.setOnClickListener {
+            startActivity(Intent(this@SettingsActivity, AgendaSyncActivity::class.java))
         }
     }
 
