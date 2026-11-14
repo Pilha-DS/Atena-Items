@@ -53,6 +53,10 @@ sealed interface AppRoutes {
     @Serializable
     data object SecurityScreen : AppRoutes
 
+    /** The link inbox: save a URL now, find it later. */
+    @Serializable
+    data object Links : AppRoutes
+
     @Serializable
     data class NoteDetail(
         val noteId: Int = -1,

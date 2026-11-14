@@ -23,10 +23,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.openappslabs.jotter.data.repository.CategoryRepository
 import com.openappslabs.jotter.data.repository.CategoryRepositoryImpl
+import com.openappslabs.jotter.data.repository.LinksRepository
+import com.openappslabs.jotter.data.repository.LinksRepositoryImpl
 import com.openappslabs.jotter.data.repository.NotesRepository
 import com.openappslabs.jotter.data.repository.NotesRepositoryImpl
 import com.openappslabs.jotter.data.source.CategoryDao
 import com.openappslabs.jotter.data.source.JotterDatabase
+import com.openappslabs.jotter.data.source.LinksDao
 import com.openappslabs.jotter.data.source.NoteDao
 import com.openappslabs.jotter.data.source.SyncDao
 import dagger.Binds
@@ -53,6 +56,12 @@ abstract class DatabaseModule {
     abstract fun bindCategoryRepository(
         categoryRepositoryImpl: CategoryRepositoryImpl
     ): CategoryRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindLinksRepository(
+        linksRepositoryImpl: LinksRepositoryImpl
+    ): LinksRepository
 
 
     companion object {
@@ -117,6 +126,50 @@ abstract class DatabaseModule {
             }
         }
 
+        /**
+         * The single "general note" (scratchpad) lives outside the list, synced
+         * under the fixed Scratchpad.UUID, so the phone and the desktop edit
+         * the same row.
+         */
+        private val MIGRATION_9_10 = object : Migration(9, 10) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `notes` ADD COLUMN `isScratchpad` INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        /**
+         * The link inbox.
+         *
+         * A separate table from `notes` on purpose: the inbox is read on every
+         * visit and written on every save, and it must never make the note list
+         * or the note editor re-read anything. `deleted_links` is the link twin
+         * of `deleted_notes`, so a removal reaches the hub and the desktop.
+         */
+        private val MIGRATION_10_11 = object : Migration(10, 11) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `links` (" +
+                        "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "`url` TEXT NOT NULL, " +
+                        "`title` TEXT NOT NULL, " +
+                        "`createdTime` INTEGER NOT NULL, " +
+                        "`updatedTime` INTEGER NOT NULL, " +
+                        "`lastOpenedTime` INTEGER NOT NULL, " +
+                        "`openCount` INTEGER NOT NULL, " +
+                        "`uuid` TEXT NOT NULL, " +
+                        "`needsSync` INTEGER NOT NULL)"
+                )
+                db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_links_uuid` ON `links` (`uuid`)")
+                db.execSQL(
+                    "CREATE INDEX IF NOT EXISTS `index_links_lastOpenedTime` ON `links` (`lastOpenedTime`)"
+                )
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS `deleted_links` (" +
+                        "`uuid` TEXT NOT NULL, `deletedAt` INTEGER NOT NULL, PRIMARY KEY(`uuid`))"
+                )
+            }
+        }
+
         @Provides
         @Singleton
         fun provideDatabase(@ApplicationContext context: Context): JotterDatabase {
@@ -125,7 +178,10 @@ abstract class DatabaseModule {
                 JotterDatabase::class.java,
                 "jotter_db"
             )
-                .addMigrations(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
+                .addMigrations(
+                    MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                    MIGRATION_9_10, MIGRATION_10_11
+                )
                 .fallbackToDestructiveMigration(dropAllTables = true)
                 .addCallback(object : RoomDatabase.Callback() {
                     override fun onOpen(db: SupportSQLiteDatabase) {
@@ -151,9 +207,14 @@ abstract class DatabaseModule {
             return database.categoryDao()
         }
 
-        @Provides
-        fun provideSyncDao(database: JotterDatabase): SyncDao {
-            return database.syncDao()
-        }
+    @Provides
+    fun provideSyncDao(database: JotterDatabase): SyncDao {
+        return database.syncDao()
     }
+
+    @Provides
+    fun provideLinksDao(database: JotterDatabase): LinksDao {
+        return database.linksDao()
+    }
+}
 }

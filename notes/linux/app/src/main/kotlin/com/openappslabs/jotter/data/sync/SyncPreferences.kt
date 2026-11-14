@@ -48,6 +48,8 @@ data class SyncConfig(
     val deviceId: String = "",
     /** Last server sequence this device has seen; `0` means "never synced". */
     val cursor: Long = 0L,
+    /** Cursor of the links stream, which advances independently from the notes. */
+    val linksCursor: Long = 0L,
     val lastSyncAt: Long = 0L
 ) {
     val isConfigured: Boolean get() = serverUrl.isNotBlank() && token.isNotBlank()
@@ -60,6 +62,7 @@ object SyncPreferenceKeys {
     val DEVICE_NAME = stringPreferencesKey("sync_device_name")
     val DEVICE_ID = stringPreferencesKey("sync_device_id")
     val CURSOR = longPreferencesKey("sync_cursor")
+    val LINKS_CURSOR = longPreferencesKey("sync_links_cursor")
     val LAST_SYNC_AT = longPreferencesKey("sync_last_at")
 }
 
@@ -83,6 +86,7 @@ class SyncPreferencesRepository(
                 deviceName = preferences[SyncPreferenceKeys.DEVICE_NAME] ?: "",
                 deviceId = preferences[SyncPreferenceKeys.DEVICE_ID] ?: "",
                 cursor = preferences[SyncPreferenceKeys.CURSOR] ?: 0L,
+                linksCursor = preferences[SyncPreferenceKeys.LINKS_CURSOR] ?: 0L,
                 lastSyncAt = preferences[SyncPreferenceKeys.LAST_SYNC_AT] ?: 0L
             )
         }
@@ -119,6 +123,13 @@ class SyncPreferencesRepository(
         }
     }
 
+    /** The links stream advances on its own; its cursor is saved apart. */
+    suspend fun saveLinksCursor(cursor: Long) {
+        dataStore.edit { preferences ->
+            preferences[SyncPreferenceKeys.LINKS_CURSOR] = cursor
+        }
+    }
+
     /**
      * Forgets what this device has pulled without touching the credentials.
      * Used when the local database is replaced wholesale (import/clear), so the
@@ -127,6 +138,7 @@ class SyncPreferencesRepository(
     suspend fun resetCursor() {
         dataStore.edit { preferences ->
             preferences.remove(SyncPreferenceKeys.CURSOR)
+            preferences.remove(SyncPreferenceKeys.LINKS_CURSOR)
             preferences.remove(SyncPreferenceKeys.LAST_SYNC_AT)
         }
     }
@@ -140,6 +152,7 @@ class SyncPreferencesRepository(
             preferences.remove(SyncPreferenceKeys.SERVER_URL)
             preferences.remove(SyncPreferenceKeys.TOKEN)
             preferences.remove(SyncPreferenceKeys.CURSOR)
+            preferences.remove(SyncPreferenceKeys.LINKS_CURSOR)
             preferences.remove(SyncPreferenceKeys.LAST_SYNC_AT)
         }
     }

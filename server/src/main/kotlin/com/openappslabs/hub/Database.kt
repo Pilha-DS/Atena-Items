@@ -182,6 +182,27 @@ class Database(private val file: Path) {
             """.trimIndent(),
             "CREATE INDEX IF NOT EXISTS index_agenda_tombstones_sync_seq ON agenda_tombstones (sync_seq)",
             """
+            CREATE TABLE IF NOT EXISTS links (
+                uuid TEXT PRIMARY KEY,
+                url TEXT NOT NULL DEFAULT '',
+                title TEXT NOT NULL DEFAULT '',
+                created_time INTEGER NOT NULL,
+                updated_time INTEGER NOT NULL,
+                last_opened_time INTEGER NOT NULL DEFAULT 0,
+                open_count INTEGER NOT NULL DEFAULT 0,
+                sync_seq INTEGER NOT NULL
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_links_sync_seq ON links (sync_seq)",
+            """
+            CREATE TABLE IF NOT EXISTS link_tombstones (
+                uuid TEXT PRIMARY KEY,
+                deleted_at INTEGER NOT NULL,
+                sync_seq INTEGER NOT NULL
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_link_tombstones_sync_seq ON link_tombstones (sync_seq)",
+            """
             CREATE TABLE IF NOT EXISTS devices (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL DEFAULT '',
@@ -219,7 +240,7 @@ class Database(private val file: Path) {
     private fun purgeOldTombstones(connection: Connection): Int {
         val cutoff = System.currentTimeMillis() - TOMBSTONE_DAYS * 24L * 60L * 60L * 1000L
         var removed = 0
-        for (table in listOf("tombstones", "agenda_tombstones")) {
+        for (table in listOf("tombstones", "agenda_tombstones", "link_tombstones")) {
             removed += connection.prepareStatement("DELETE FROM $table WHERE deleted_at < ?").use { statement ->
                 statement.setLong(1, cutoff)
                 statement.executeUpdate()
@@ -251,6 +272,9 @@ class Database(private val file: Path) {
 
         /** The agenda has its own stream, so its clients' cursors are independent. */
         const val KEY_AGENDA_SEQ = "agenda_sync_seq"
+
+        /** The link inbox is a third stream, with its own cursor. */
+        const val KEY_LINKS_SEQ = "links_sync_seq"
         private const val KEY_CREATED = "created_at"
         private const val TOMBSTONE_DAYS = 180L
     }

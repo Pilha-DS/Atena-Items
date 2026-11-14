@@ -11,11 +11,14 @@ package com.openappslabs.jotter.di
 
 import com.openappslabs.jotter.data.repository.CategoryRepository
 import com.openappslabs.jotter.data.repository.CategoryRepositoryImpl
+import com.openappslabs.jotter.data.repository.LinksRepository
+import com.openappslabs.jotter.data.repository.LinksRepositoryImpl
 import com.openappslabs.jotter.data.repository.NotesRepository
 import com.openappslabs.jotter.data.repository.NotesRepositoryImpl
 import com.openappslabs.jotter.data.repository.UserPreferencesRepository
 import com.openappslabs.jotter.data.source.DatabaseFactory
 import com.openappslabs.jotter.data.source.JotterDatabase
+import com.openappslabs.jotter.data.sync.NetworkMonitor
 import com.openappslabs.jotter.data.sync.SyncClient
 import com.openappslabs.jotter.data.sync.SyncEngine
 import com.openappslabs.jotter.data.sync.SyncPreferencesRepository
@@ -51,13 +54,18 @@ object AppGraph {
         SyncPreferencesRepository(dataStore)
     }
 
+    /** Tells the sync loop whether the current connection costs the user money. */
+    val networkMonitor: NetworkMonitor by lazy { NetworkMonitor() }
+
     val syncEngine: SyncEngine by lazy {
         SyncEngine(
             database = database,
             syncDao = database.syncDao(),
             categoryDao = database.categoryDao(),
+            linksDao = database.linksDao(),
             preferences = syncPreferencesRepository,
             client = SyncClient(),
+            network = networkMonitor,
             scope = appScope
         )
     }
@@ -73,5 +81,9 @@ object AppGraph {
 
     val categoryRepository: CategoryRepository by lazy {
         CategoryRepositoryImpl(database.categoryDao(), database.noteDao(), database)
+    }
+
+    val linksRepository: LinksRepository by lazy {
+        LinksRepositoryImpl(linksDao = database.linksDao(), database = database)
     }
 }

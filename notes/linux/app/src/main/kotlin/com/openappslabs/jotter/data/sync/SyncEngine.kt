@@ -20,6 +20,7 @@ import androidx.compose.runtime.Immutable
 import com.openappslabs.jotter.data.model.Category
 import com.openappslabs.jotter.data.source.CategoryDao
 import com.openappslabs.jotter.data.source.JotterDatabase
+import com.openappslabs.jotter.data.source.LinksDao
 import com.openappslabs.jotter.data.source.SyncDao
 import com.openappslabs.jotter.data.source.inTransaction
 import com.openappslabs.jotter.platform.Diagnostics
@@ -30,10 +31,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.math.abs
 
@@ -48,7 +51,11 @@ data class SyncState(
     val error: SyncErrorKind? = null,
     val errorDetail: String? = null,
     /** Server clock minus this device's clock, in milliseconds. */
-    val clockSkewMs: Long = 0L
+    val clockSkewMs: Long = 0L,
+    /** The automatic pull is running on a mobile link, so it is backing off. */
+    val metered: Boolean = false,
+    /** There is no default route right now; the pull is paused instead of failing. */
+    val offline: Boolean = false
 ) {
     /** LWW is decided by client clocks, so a big difference is worth warning about. */
     val hasClockSkew: Boolean get() = abs(clockSkewMs) > CLOCK_SKEW_WARNING_MS
@@ -64,17 +71,29 @@ data class SyncState(
  * Triggers: local changes (the pending counter is observed, debounced),
  * a periodic pull so notes written on the phone show up, and the manual
  * button. Everything goes through one mutex, so two triggers never overlap.
+ *
+ * The cadence follows the connection: on a mobile link it is six times slower
+ * and never waits less than the capped interval, and with no default route the
+ * pull pauses instead of failing every five minutes.
  */
 class SyncEngine(
     private val database: JotterDatabase,
     private val syncDao: SyncDao,
     private val categoryDao: CategoryDao,
+    private val linksDao: LinksDao,
     private val preferences: SyncPreferencesRepository,
     private val client: SyncClient,
+    private val network: NetworkMonitor,
     private val scope: CoroutineScope
 ) {
 
-    private val _state = MutableStateFlow(SyncState())
+    private val initialCost = network.current()
+    private val _state = MutableStateFlow(
+        SyncState(
+            metered = initialCost == NetworkCost.METERED,
+            offline = initialCost == NetworkCost.OFFLINE
+        )
+    )
     val state: StateFlow<SyncState> = _state.asStateFlow()
 
     private val mutex = Mutex()
@@ -95,29 +114,75 @@ class SyncEngine(
             }
         }
 
+        // Track the cost of the connection so the UI can say "mobile link" and
+        // the loop can pick the right cadence.
+        scope.launch {
+            var previous = network.cost.value
+            network.cost.collect { cost ->
+                _state.update {
+                    it.copy(
+                        metered = cost == NetworkCost.METERED,
+                        offline = cost == NetworkCost.OFFLINE
+                    )
+                }
+                // Back online after an outage: the edits are already on disk, so
+                // one round delivers them instead of waiting for the (possibly
+                // capped) periodic tick.
+                if (previous == NetworkCost.OFFLINE && cost != NetworkCost.OFFLINE) {
+                    runSync(manual = false)
+                }
+                previous = cost
+            }
+        }
+
         // Something changed locally: push it soon, but coalesce a burst of
         // auto-saves from the editor into one request. Deletions count too, so
-        // emptying the trash pushes even when no row is left to upload.
+        // emptying the trash pushes even when no row is left to upload. Links
+        // are part of the same trigger: saving one is a local change.
         scope.launch {
             combine(
                 syncDao.observePendingCount(),
-                syncDao.observePendingDeletionCount()
-            ) { notes, deletions -> notes + deletions }
-                .debounce(PUSH_DEBOUNCE_MS)
+                syncDao.observePendingDeletionCount(),
+                linksDao.observePendingCount(),
+                linksDao.observePendingDeletionCount()
+            ) { notes, deletions, links, linkDeletions ->
+                notes + deletions + links + linkDeletions
+            }
+                .debounce(SyncCadence.PUSH_DEBOUNCE_MS)
                 .collect { pending ->
                     if (pending > 0) runSync(manual = false)
                 }
         }
 
         // Startup pull, then keep pulling so the other device's edits arrive
-        // even when this device is idle.
+        // even when this device is idle. The wait is recomputed every round,
+        // because the machine may have moved to a mobile link (or lost the
+        // default route) since the last one.
         scope.launch {
             if (preferences.read().isConfigured) runSync(manual = false)
             while (true) {
-                delay(PERIODIC_SYNC_MS)
-                runSync(manual = false)
+                waitForNextPull(network.current())
+                // Offline there is nobody to talk to, and a failed request every
+                // five minutes would only paint an error over a device that is
+                // doing nothing wrong. The cost flow also triggers a round as
+                // soon as the route comes back.
+                if (network.current() != NetworkCost.OFFLINE) runSync(manual = false)
             }
         }
+    }
+
+    /**
+     * Sleeps until the next automatic pull, cutting the wait short the moment
+     * the connection becomes free again: sitting out the whole capped interval
+     * with Wi-Fi or Ethernet available would save nothing.
+     */
+    private suspend fun waitForNextPull(cost: NetworkCost) {
+        val wait = SyncCadence.periodicDelay(cost)
+        if (cost == NetworkCost.UNMETERED) {
+            delay(wait)
+            return
+        }
+        withTimeoutOrNull(wait) { network.cost.first { it == NetworkCost.UNMETERED } }
     }
 
     /** The "sync now" button and the first sync right after connecting. */
@@ -151,6 +216,15 @@ class SyncEngine(
                 return
             }
 
+            // A background trigger with no route would spend nothing but would
+            // paint a network error over a machine that is fine. The manual
+            // button still tries: the user asked, and the error is the answer
+            // to "why is nothing arriving?".
+            if (!manual && network.current() == NetworkCost.OFFLINE) {
+                _state.update { it.copy(configured = true, running = false, offline = true) }
+                return
+            }
+
             _state.update {
                 it.copy(configured = true, running = true, error = null, errorDetail = null)
             }
@@ -175,16 +249,25 @@ class SyncEngine(
                 val now = System.currentTimeMillis()
                 preferences.saveCursor(cursor = response.cursor, syncedAt = now)
 
+                // The link inbox is a second, independent stream. A hub that
+                // predates it answers 404; the notes sync above must still be
+                // considered a success in that case, so this step never turns
+                // a good notes sync into an error screen.
+                val links = runCatching { syncLinks(config) }
+                    .onFailure { Diagnostics.log("links sync skipped: ${it.message}") }
+                    .getOrNull()
+
                 _state.update {
                     it.copy(
                         running = false,
                         cursor = response.cursor,
                         lastSyncAt = now,
-                        pushed = pendingNotes.size + pendingDeletions.size,
-                        pulled = response.notes.size + response.deletions.size,
+                        pushed = pendingNotes.size + pendingDeletions.size + (links?.first ?: 0),
+                        pulled = response.notes.size + response.deletions.size + (links?.second ?: 0),
                         clockSkewMs = response.serverTime - now,
                         error = null,
-                        errorDetail = null
+                        errorDetail = null,
+                        offline = false
                     )
                 }
                 Diagnostics.log(
@@ -197,7 +280,9 @@ class SyncEngine(
                     it.copy(
                         running = false,
                         error = error.kind,
-                        errorDetail = error.message
+                        errorDetail = error.message,
+                        offline = error.kind == SyncErrorKind.NETWORK &&
+                            network.current() == NetworkCost.OFFLINE
                     )
                 }
             } catch (error: Exception) {
@@ -262,11 +347,61 @@ class SyncEngine(
         }
     }
 
-    private companion object {
-        /** A burst of auto-saves becomes one push. */
-        const val PUSH_DEBOUNCE_MS = 4_000L
+    /**
+     * The link inbox stream: a full LWW round of its own.
+     *
+     * Returns `pushed to pulled`, so the "sync now" feedback can report both
+     * streams as one number without the screen knowing there are two.
+     */
+    private suspend fun syncLinks(config: SyncConfig): Pair<Int, Int> {
+        val pendingLinks = linksDao.getPendingLinks()
+        val pendingDeletions = linksDao.getPendingDeletions()
 
-        /** Pull cadence when this device is idle. */
-        const val PERIODIC_SYNC_MS = 5 * 60 * 1000L
+        val request = SyncLinksRequestDto(
+            cursor = config.linksCursor,
+            deviceId = config.deviceId,
+            deviceName = config.deviceName,
+            links = pendingLinks.map { it.toSyncDto() },
+            deletions = pendingDeletions.map {
+                SyncLinkDeletionDto(uuid = it.uuid, deletedAt = it.deletedAt)
+            }
+        )
+
+        val response = client.syncLinks(config, request)
+
+        database.inTransaction {
+            for (dto in response.links) {
+                if (dto.uuid.isBlank()) continue
+                val local = linksDao.getByUuid(dto.uuid)
+                when {
+                    local == null -> linksDao.insertFromServer(dto.toLink())
+                    dto.updatedTime > local.updatedTime -> linksDao.updateFromServer(
+                        dto.toLink(id = local.id)
+                    )
+                    // Local is newer or equal: it stays dirty and wins on the
+                    // next push (LWW by updatedTime).
+                }
+            }
+
+            for (deletion in response.deletions) {
+                val local = linksDao.getByUuid(deletion.uuid) ?: continue
+                // Opened after the removal: the newer version wins.
+                if (deletion.deletedAt >= local.updatedTime) {
+                    linksDao.deleteByUuid(deletion.uuid)
+                }
+            }
+
+            // Same acknowledgement rule as the notes: only what the server kept.
+            val serverUpdated = response.links.associate { it.uuid to it.updatedTime }
+            val confirmed = pendingLinks
+                .filterNot { link -> (serverUpdated[link.uuid] ?: -1L) > link.updatedTime }
+                .map { it.uuid }
+            if (confirmed.isNotEmpty()) linksDao.markSynced(confirmed)
+            if (pendingDeletions.isNotEmpty()) linksDao.clearDeletions(pendingDeletions.map { it.uuid })
+        }
+
+        preferences.saveLinksCursor(response.cursor)
+        return (pendingLinks.size + pendingDeletions.size) to
+            (response.links.size + response.deletions.size)
     }
 }

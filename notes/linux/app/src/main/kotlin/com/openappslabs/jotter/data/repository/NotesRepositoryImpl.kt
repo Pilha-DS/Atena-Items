@@ -21,6 +21,7 @@ import com.openappslabs.jotter.data.source.inTransaction
 import com.openappslabs.jotter.data.model.BackupData
 import com.openappslabs.jotter.data.model.Note
 import com.openappslabs.jotter.data.model.NoteStatus
+import com.openappslabs.jotter.data.model.Scratchpad
 import com.openappslabs.jotter.data.source.CategoryDao
 import com.openappslabs.jotter.data.source.JotterDatabase
 import com.openappslabs.jotter.data.source.NoteDao
@@ -218,10 +219,15 @@ class NotesRepositoryImpl(
 
     override suspend fun getOrCreateScratchpad(): Note {
         noteDao.getScratchpad()?.let { return it }
-        // The general note is device-local and never synced, but it still gets
-        // an identity so every row has a non-blank uuid.
-        val draft = Note(isScratchpad = true, uuid = UUID.randomUUID().toString())
-        val id = noteDao.insert(draft.copy(updatedTime = System.currentTimeMillis())).toInt()
+        // The general note is synced like any other note, under the fixed
+        // scratchpad uuid, so every device edits the same row.
+        //
+        // A brand-new row is *older than everything* and not dirty: if the hub
+        // already holds a general note written on another device, that one has
+        // to win the first sync. Stamping "now" here would let an empty page
+        // overwrite real text by LWW.
+        val draft = Note(isScratchpad = true, uuid = Scratchpad.UUID, createdTime = 0L, updatedTime = 0L)
+        val id = noteDao.insert(draft).toInt()
         return noteDao.getNoteById(id) ?: draft.copy(id = id)
     }
 
@@ -232,7 +238,6 @@ class NotesRepositoryImpl(
             updatedTime = System.currentTimeMillis()
         )
     }
-
     private companion object {
         /** How long the shared list survives with no screen watching it. */
         const val STOP_TIMEOUT_MS = 5_000L

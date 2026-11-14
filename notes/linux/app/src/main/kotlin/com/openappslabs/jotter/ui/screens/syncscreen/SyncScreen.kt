@@ -29,6 +29,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.CloudQueue
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Visibility
@@ -63,6 +64,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.openappslabs.jotter.data.sync.SyncCadence
 import com.openappslabs.jotter.data.sync.SyncErrorKind
 import com.openappslabs.jotter.di.AppGraph
 import com.openappslabs.jotter.ui.components.BackButton
@@ -336,6 +338,47 @@ fun SyncScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
+                            }
+
+                            // Why the automatic pull is slower than usual, or
+                            // paused: the answer to "is this spending my data?"
+                            // belongs on the screen, not only in the logs.
+                            if (sync.offline) {
+                                Row(verticalAlignment = Alignment.Top) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudOff,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .padding(top = 2.dp)
+                                            .size(16.dp)
+                                    )
+                                    Text(
+                                        text = strings.syncOffline,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 6.dp)
+                                    )
+                                }
+                            } else if (sync.metered) {
+                                Row(verticalAlignment = Alignment.Top) {
+                                    Icon(
+                                        imageVector = Icons.Default.CloudQueue,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .padding(top = 2.dp)
+                                            .size(16.dp)
+                                    )
+                                    Text(
+                                        text = strings.syncMetered(
+                                            (SyncCadence.METERED_MAX_DELAY_MS / 60_000L).toInt()
+                                        ),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(start = 6.dp)
+                                    )
+                                }
                             }
 
                             sync.error?.let { error ->

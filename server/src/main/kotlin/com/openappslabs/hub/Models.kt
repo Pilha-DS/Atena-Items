@@ -99,6 +99,7 @@ data class StatsResponse(
     val trashed: Int = 0,
     val tombstones: Int = 0,
     val categories: Int = 0,
+    val links: Int = 0,
     val cursor: Long = 0L,
     val serverTime: Long = 0L,
     /** Which devices have connected, newest first. */
@@ -159,6 +160,52 @@ data class AgendaSyncResponse(
     val serverTime: Long = 0L,
     val events: List<AgendaEventDto> = emptyList(),
     val deletions: List<AgendaDeletionDto> = emptyList()
+)
+
+// ---------------------------------------------------------------------------
+// Links: the Jotter "link inbox", on its own stream.
+// ---------------------------------------------------------------------------
+
+/**
+ * A saved link as it travels.
+ *
+ * `url` is what the user pasted, already normalized by the client (scheme and
+ * host); [title] is optional. [lastOpenedTime] and [openCount] are usage hints
+ * used to rank the list, and they travel so every device ranks the same way.
+ */
+@Serializable
+data class LinkDto(
+    val uuid: String = "",
+    val url: String = "",
+    val title: String = "",
+    val createdTime: Long = 0L,
+    val updatedTime: Long = 0L,
+    val lastOpenedTime: Long = 0L,
+    val openCount: Int = 0
+)
+
+@Serializable
+data class LinkDeletionDto(
+    val uuid: String = "",
+    val deletedAt: Long = 0L
+)
+
+@Serializable
+data class LinksSyncRequest(
+    /** Cursor of the links stream, not the notes one. `0` means everything. */
+    val cursor: Long = 0L,
+    val deviceId: String = "",
+    val deviceName: String = "",
+    val links: List<LinkDto> = emptyList(),
+    val deletions: List<LinkDeletionDto> = emptyList()
+)
+
+@Serializable
+data class LinksSyncResponse(
+    val cursor: Long = 0L,
+    val serverTime: Long = 0L,
+    val links: List<LinkDto> = emptyList(),
+    val deletions: List<LinkDeletionDto> = emptyList()
 )
 
 

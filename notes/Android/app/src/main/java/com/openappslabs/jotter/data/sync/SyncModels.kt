@@ -16,8 +16,10 @@
 
 package com.openappslabs.jotter.data.sync
 
+import com.openappslabs.jotter.data.model.Link
 import com.openappslabs.jotter.data.model.Note
 import com.openappslabs.jotter.data.model.NoteFormat
+import com.openappslabs.jotter.data.model.Scratchpad
 import kotlinx.serialization.Serializable
 
 /**
@@ -73,6 +75,72 @@ data class SyncErrorDto(
     val error: String = ""
 )
 
+// ---------------------------------------------------------------------------
+// Link inbox. Its own stream on the hub, so its cursor is independent from the
+// notes' one: a links pull can never confuse the notes and vice versa.
+// ---------------------------------------------------------------------------
+
+@Serializable
+data class SyncLinkDto(
+    val uuid: String = "",
+    val url: String = "",
+    val title: String = "",
+    val createdTime: Long = 0L,
+    val updatedTime: Long = 0L,
+    val lastOpenedTime: Long = 0L,
+    val openCount: Int = 0
+)
+
+@Serializable
+data class SyncLinkDeletionDto(
+    val uuid: String = "",
+    val deletedAt: Long = 0L
+)
+
+@Serializable
+data class SyncLinksRequestDto(
+    val cursor: Long = 0L,
+    val deviceId: String = "",
+    val deviceName: String = "",
+    val links: List<SyncLinkDto> = emptyList(),
+    val deletions: List<SyncLinkDeletionDto> = emptyList()
+)
+
+@Serializable
+data class SyncLinksResponseDto(
+    val cursor: Long = 0L,
+    val serverTime: Long = 0L,
+    val links: List<SyncLinkDto> = emptyList(),
+    val deletions: List<SyncLinkDeletionDto> = emptyList()
+)
+
+/** The link row becomes the wire shape (local `id` and `needsSync` stay here). */
+fun Link.toSyncDto(): SyncLinkDto = SyncLinkDto(
+    uuid = uuid,
+    url = url,
+    title = title,
+    createdTime = createdTime,
+    updatedTime = updatedTime,
+    lastOpenedTime = lastOpenedTime,
+    openCount = openCount
+)
+
+/**
+ * The other direction. [id] is the local primary key when the row already
+ * exists, and [needsSync] is always false because this came from the server.
+ */
+fun SyncLinkDto.toLink(id: Int = 0, needsSync: Boolean = false): Link = Link(
+    id = id,
+    url = url,
+    title = title,
+    createdTime = createdTime,
+    updatedTime = updatedTime,
+    lastOpenedTime = lastOpenedTime,
+    openCount = openCount,
+    uuid = uuid,
+    needsSync = needsSync
+)
+
 /**
  * The raw database row becomes the wire shape.
  *
@@ -101,6 +169,10 @@ fun Note.toSyncDto(): SyncNoteDto = SyncNoteDto(
 /**
  * The other direction. [id] is the local primary key when updating a row that
  * already exists; [needsSync] is always false because this came from the server.
+ *
+ * `isScratchpad` is derived from the uuid: the general note travels as a normal
+ * note, and the fixed [Scratchpad.UUID] is what marks it as the scratchpad on
+ * every device it lands on.
  */
 fun SyncNoteDto.toNote(
     id: Int = 0,
@@ -122,6 +194,7 @@ fun SyncNoteDto.toNote(
     encryptionSalt = encryptionSalt,
     encryptedContent = encryptedContent,
     format = format,
+    isScratchpad = uuid == Scratchpad.UUID,
     uuid = uuid,
     needsSync = needsSync
 )

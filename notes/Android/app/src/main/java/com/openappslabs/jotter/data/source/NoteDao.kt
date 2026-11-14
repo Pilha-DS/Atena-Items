@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface NoteDao {
 
-    @Query("SELECT * FROM notes WHERE isArchived = 0 AND isTrashed = 0 ORDER BY isPinned DESC, updatedTime DESC")
+    @Query("SELECT * FROM notes WHERE isArchived = 0 AND isTrashed = 0 AND isScratchpad = 0 ORDER BY isPinned DESC, updatedTime DESC")
     fun getAllNotes(): Flow<List<Note>>
 
     @Query("SELECT * FROM notes WHERE id = :noteId")
@@ -97,11 +97,23 @@ interface NoteDao {
     @Query("INSERT OR REPLACE INTO deleted_notes(uuid, deletedAt) VALUES(:uuid, :deletedAt)")
     suspend fun addTombstone(uuid: String, deletedAt: Long)
 
-    @Query("SELECT * FROM notes WHERE isArchived = 1 AND isTrashed = 0 ORDER BY updatedTime DESC")
+    @Query("SELECT * FROM notes WHERE isArchived = 1 AND isTrashed = 0 AND isScratchpad = 0 ORDER BY updatedTime DESC")
     fun getArchivedNotes(): Flow<List<Note>>
 
-    @Query("SELECT * FROM notes WHERE isTrashed = 1 ORDER BY updatedTime DESC")
+    @Query("SELECT * FROM notes WHERE isTrashed = 1 AND isScratchpad = 0 ORDER BY updatedTime DESC")
     fun getTrashedNotes(): Flow<List<Note>>
+
+    // -----------------------------------------------------------------------
+    // The single "general note" (scratchpad). It is an ordinary note row with
+    // `isScratchpad = 1`, synced under the fixed Scratchpad.UUID.
+    // -----------------------------------------------------------------------
+
+    @Query("SELECT * FROM notes WHERE isScratchpad = 1 ORDER BY id ASC LIMIT 1")
+    suspend fun getScratchpad(): Note?
+
+    /** Only touches the text: it has no title, category or timestamp to show. */
+    @Query("UPDATE notes SET content = :content, updatedTime = :updatedTime, needsSync = 1 WHERE id = :noteId")
+    suspend fun updateScratchpadContent(noteId: Int, content: String, updatedTime: Long)
 
     /**
      * Copies the uuid of every trashed note into the tombstone table before

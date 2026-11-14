@@ -19,12 +19,14 @@ package com.openappslabs.jotter.data.source
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.openappslabs.jotter.data.model.Category
+import com.openappslabs.jotter.data.model.DeletedLink
 import com.openappslabs.jotter.data.model.DeletedNote
+import com.openappslabs.jotter.data.model.Link
 import com.openappslabs.jotter.data.model.Note
 
 @Database(
-    entities = [Note::class, Category::class, DeletedNote::class],
-    version = 10,
+    entities = [Note::class, Category::class, DeletedNote::class, Link::class, DeletedLink::class],
+    version = 12,
     exportSchema = false
 )
 abstract class JotterDatabase : RoomDatabase() {
@@ -34,4 +36,7 @@ abstract class JotterDatabase : RoomDatabase() {
     abstract fun categoryDao(): CategoryDao
 
     abstract fun syncDao(): SyncDao
+
+    /** The link inbox: its own table and its own sync stream. */
+    abstract fun linksDao(): LinksDao
 }

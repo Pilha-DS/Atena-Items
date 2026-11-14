@@ -28,6 +28,7 @@ import com.openappslabs.jotter.ui.screens.appearancescreen.AppearanceScreen
 import com.openappslabs.jotter.ui.screens.datamanagementscreen.DataManagementScreen
 import com.openappslabs.jotter.ui.screens.miscellaneousscreen.MiscellaneousScreen
 import com.openappslabs.jotter.ui.screens.homescreen.HomeScreen
+import com.openappslabs.jotter.ui.screens.linksscreen.LinksScreen
 import com.openappslabs.jotter.ui.screens.notedetailscreen.NoteDetailScreen
 import com.openappslabs.jotter.ui.screens.privacypolicyscreen.PrivacyPolicyScreen
 import com.openappslabs.jotter.ui.screens.securityscreen.SecurityScreen
@@ -55,8 +56,13 @@ fun AppNavHost(
                 },
                 onAddCategoryClick = { navController.navigate(AppRoutes.AddCategory) },
                 onSettingsClick = { navController.navigate(AppRoutes.Settings) },
-                onProfileClick = { navController.navigate(AppRoutes.About) }
+                onProfileClick = { navController.navigate(AppRoutes.About) },
+                onLinksClick = { navController.navigate(AppRoutes.Links) }
             )
+        }
+
+        composable<AppRoutes.Links> {
+            LinksScreen(onBackClick = navController::popBackStack)
         }
 
         composable<AppRoutes.AddCategory> {

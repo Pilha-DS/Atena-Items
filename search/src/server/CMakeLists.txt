@@ -719,6 +719,16 @@ set(SRCS
 	src/builtins/notes/notes-store.cpp
 	src/builtins/notes/notes-tools.hpp
 	src/builtins/notes/notes-tools.cpp
+	src/builtins/links/links-extension.hpp
+	src/builtins/links/links-store.hpp
+	src/builtins/links/links-store.cpp
+	src/builtins/links/links-tools.hpp
+	src/builtins/links/links-tools.cpp
+	src/builtins/agenda/agenda-extension.hpp
+	src/builtins/agenda/agenda-store.hpp
+	src/builtins/agenda/agenda-store.cpp
+	src/builtins/agenda/agenda-tools.hpp
+	src/builtins/agenda/agenda-tools.cpp
 	src/ui/views/drag-utils.hpp
 	src/ui/views/drag-utils.cpp
 	src/ui/views/section-source.hpp

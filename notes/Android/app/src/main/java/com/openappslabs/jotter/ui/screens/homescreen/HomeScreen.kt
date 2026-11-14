@@ -79,6 +79,8 @@ fun HomeScreen(
     onAddNoteClick: (String?) -> Unit,
     onAddCategoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
+    onGeneralNoteClick: () -> Unit = {},
+    onLinksClick: () -> Unit = {},
     viewModel: HomeScreenViewModel = hiltViewModel()
 ) {
     val haptics = rememberJotterHaptics()
@@ -179,7 +181,9 @@ fun HomeScreen(
                 onSortClick = {
                     haptics.tick()
                     showSortSheet = true
-                }
+                },
+                onGeneralNoteClick = onGeneralNoteClick,
+                onLinksClick = onLinksClick
             )
 
             if (uiState.allNotes.isEmpty()) {

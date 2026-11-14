@@ -68,6 +68,12 @@ data class Note(
      */
     val format: String = NoteFormat.TEXT.key,
     /**
+     * The single "general note" (scratchpad). It is a normal note row, but it
+     * lives outside the list: it is edited from its own screen and synced under
+     * the fixed [Scratchpad.UUID]. Only one row ever has this set.
+     */
+    val isScratchpad: Boolean = false,
+    /**
      * Stable identity of this note across devices and the sync server. It is
      * generated when the note is created and never changes; `id` stays local
      * to this database.

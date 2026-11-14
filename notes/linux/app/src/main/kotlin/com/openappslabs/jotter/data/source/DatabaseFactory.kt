@@ -15,6 +15,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
+import com.openappslabs.jotter.data.model.Scratchpad
 import com.openappslabs.jotter.platform.Diagnostics
 import com.openappslabs.jotter.platform.Xdg
 import kotlinx.coroutines.Dispatchers
@@ -94,12 +95,75 @@ object DatabaseFactory {
         }
     }
 
+    /**
+     * The link inbox.
+     *
+     * A separate table from `notes` on purpose: the inbox is read on every
+     * visit and written on every save, and it must never make the note list or
+     * the note editor re-read anything. `deleted_links` is the link twin of
+     * `deleted_notes`, so a removal reaches the hub and the other devices.
+     */
+    private val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `links` (" +
+                    "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                    "`url` TEXT NOT NULL, " +
+                    "`title` TEXT NOT NULL, " +
+                    "`createdTime` INTEGER NOT NULL, " +
+                    "`updatedTime` INTEGER NOT NULL, " +
+                    "`lastOpenedTime` INTEGER NOT NULL, " +
+                    "`openCount` INTEGER NOT NULL, " +
+                    "`uuid` TEXT NOT NULL, " +
+                    "`needsSync` INTEGER NOT NULL)"
+            )
+            connection.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_links_uuid` ON `links` (`uuid`)")
+            connection.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_links_lastOpenedTime` ON `links` (`lastOpenedTime`)"
+            )
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS `deleted_links` (" +
+                    "`uuid` TEXT NOT NULL, `deletedAt` INTEGER NOT NULL, PRIMARY KEY(`uuid`))"
+            )
+        }
+    }
+
+    /**
+     * The general note becomes shared.
+     *
+     * Until now the scratchpad was device-local and carried a random uuid; now
+     * it syncs like any other note, identified by [Scratchpad.UUID]. Existing
+     * text is kept, gets that identity and is queued for upload, so the note
+     * written here appears on the other devices on the next sync.
+     */
+    private val MIGRATION_11_12 = object : Migration(11, 12) {
+        override fun migrate(connection: SQLiteConnection) {
+            // Only when there is no row with that identity yet: if a pulled
+            // copy already exists, the server one is the same note and wins.
+            var exists = false
+            connection.prepare("SELECT 1 FROM `notes` WHERE `uuid` = '${Scratchpad.UUID}'").use { statement ->
+                exists = statement.step()
+            }
+            if (!exists) {
+                connection.execSQL(
+                    "UPDATE `notes` SET `uuid` = '${Scratchpad.UUID}', `needsSync` = 1 " +
+                        "WHERE `isScratchpad` = 1"
+                )
+            } else {
+                // The server already has the general note: the local copy is a
+                // stale duplicate and the pulled row will become the scratchpad.
+                connection.execSQL("DELETE FROM `notes` WHERE `isScratchpad` = 1")
+            }
+        }
+    }
+
     fun create(): JotterDatabase {
         Xdg.ensureDirectories()
         return Room.databaseBuilder<JotterDatabase>(name = Xdg.databaseFile.toString())
             .setDriver(BundledSQLiteDriver())
             .addMigrations(
-                MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10
+                MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9,
+                MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12
             )
             // No destructive fallback on purpose: a missing migration must fail
             // loudly instead of silently dropping every note.

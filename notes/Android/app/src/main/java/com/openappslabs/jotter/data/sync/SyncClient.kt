@@ -75,6 +75,30 @@ class SyncClient @Inject constructor() {
             }
         }
 
+    /**
+     * The link inbox uses its own endpoint and cursor. Batching both streams in
+     * one request would mean one slow stream delays the other, and the links
+     * are tiny and independent from the notes.
+     */
+    suspend fun syncLinks(config: SyncConfig, request: SyncLinksRequestDto): SyncLinksResponseDto =
+        withContext(Dispatchers.IO) {
+            val payload = json.encodeToString(SyncLinksRequestDto.serializer(), request)
+            val body = execute(
+                config = config,
+                path = "/api/v1/tools/jotter/links/sync",
+                body = payload
+            )
+            try {
+                json.decodeFromString(SyncLinksResponseDto.serializer(), body)
+            } catch (error: Exception) {
+                throw SyncException(
+                    SyncErrorKind.INVALID_RESPONSE,
+                    "could not read the server response: ${error.message}",
+                    error
+                )
+            }
+        }
+
     private fun execute(config: SyncConfig, path: String, body: String?): String {
         val base = baseUrl(config.serverUrl)
         if (base.isEmpty()) {
@@ -127,10 +151,15 @@ class SyncClient @Inject constructor() {
                 }
             }
         } catch (error: IOException) {
-            throw SyncException(SyncErrorKind.NETWORK, error.message ?: "network error", error)
-        } finally {
+            // A broken exchange is not worth keeping in the keep-alive pool.
             connection.disconnect()
+            throw SyncException(SyncErrorKind.NETWORK, error.message ?: "network error", error)
         }
+        // No `disconnect()` on the happy path on purpose: the response was read
+        // to the end, so HttpURLConnection returns the socket to its pool and
+        // the second request of the round — the link stream, same host — rides
+        // the TLS session already negotiated. Closing it here would pay for a
+        // new handshake every time, which is the bulk of an idle round's bytes.
     }
 
     private companion object {

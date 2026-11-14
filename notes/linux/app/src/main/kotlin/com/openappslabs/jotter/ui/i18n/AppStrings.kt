@@ -328,6 +328,9 @@ interface AppStrings {
     val syncErrorServer: String
     val syncErrorResponse: String
     val syncClockSkew: (String) -> String
+    /** Automatic cadence on a mobile link; the argument is the interval in minutes. */
+    val syncMetered: (Int) -> String
+    val syncOffline: String
     val syncDisconnectTitle: String
     val syncDisconnectMessage: String
 
@@ -373,6 +376,24 @@ interface AppStrings {
     val alwaysOnTop: String
     val quit: String
 
+    // ------------------------------------------------------------ link inbox
+    val linkInbox: String
+    val linkInboxTitle: String
+    val linkPlaceholder: String
+    val saveLink: String
+    val pasteLink: String
+    val linkSaved: String
+    val invalidLink: String
+    val linkRemoved: String
+    val noLinksYet: String
+    val noLinksHint: String
+    val noLinksMatch: (String) -> String
+    val searchLinks: String
+    val openLink: String
+    val copyLink: String
+    val linkCopied: String
+    val deleteLink: String
+
     // ------------------------------------------------------- privacy policy
     val privacyIntroTitle: String
     val privacyIntroBody: String
@@ -391,6 +412,7 @@ interface AppStrings {
 abstract class BaseStrings : AppStrings {
     override val formatName: (String) -> String = { it }
     override val noNotesInCategory: (String) -> String = { it }
+    override val noLinksMatch: (String) -> String = { it }
 }
 
 private val EnLocale: Locale = Locale.forLanguageTag("en")
@@ -660,6 +682,10 @@ object EnglishStrings : BaseStrings() {
     override val syncClockSkew = { difference: String ->
         "This device's clock is $difference off the server. The newest note may lose the conflict."
     }
+    override val syncMetered = { minutes: Int ->
+        "On a mobile link · automatic sync every $minutes min at most"
+    }
+    override val syncOffline = "No connection · sync resumes when the network returns"
     override val syncDisconnectTitle = "Disconnect from the server?"
     override val syncDisconnectMessage =
         "The notes stay on this device. The server copy is left untouched."
@@ -704,6 +730,23 @@ object EnglishStrings : BaseStrings() {
     override val hideWidget = "Hide widget"
     override val alwaysOnTop = "Always on top"
     override val quit = "Quit"
+
+    override val linkInbox = "Links"
+    override val linkInboxTitle = "Jotter · Links"
+    override val linkPlaceholder = "Paste a link to keep it"
+    override val saveLink = "Save link"
+    override val pasteLink = "Paste and save"
+    override val linkSaved = "Link saved"
+    override val invalidLink = "That does not look like a link"
+    override val linkRemoved = "Link removed"
+    override val noLinksYet = "No links yet"
+    override val noLinksHint = "Paste a link above; it stays here for when you need it."
+    override val noLinksMatch = { query: String -> "No links match \"$query\"" }
+    override val searchLinks = "Search links"
+    override val openLink = "Open link"
+    override val copyLink = "Copy link"
+    override val linkCopied = "Link copied"
+    override val deleteLink = "Delete link"
 
     override val privacyIntroTitle = "1. Introduction"
     override val privacyIntroBody =
@@ -992,6 +1035,10 @@ object PortugueseStrings : BaseStrings() {
     override val syncClockSkew = { difference: String ->
         "O relógio deste aparelho está $difference fora do servidor. A nota mais recente pode perder o conflito."
     }
+    override val syncMetered = { minutes: Int ->
+        "Em link móvel · sync automático no máximo a cada $minutes min"
+    }
+    override val syncOffline = "Sem conexão · o sync volta quando a rede voltar"
     override val syncDisconnectTitle = "Desconectar do servidor?"
     override val syncDisconnectMessage =
         "As notas continuam neste aparelho. A cópia no servidor não é alterada."
@@ -1036,6 +1083,23 @@ object PortugueseStrings : BaseStrings() {
     override val hideWidget = "Ocultar widget"
     override val alwaysOnTop = "Sempre no topo"
     override val quit = "Sair"
+
+    override val linkInbox = "Links"
+    override val linkInboxTitle = "Jotter · Links"
+    override val linkPlaceholder = "Cole um link para guardar"
+    override val saveLink = "Salvar link"
+    override val pasteLink = "Colar e salvar"
+    override val linkSaved = "Link salvo"
+    override val invalidLink = "Isso não parece um link"
+    override val linkRemoved = "Link removido"
+    override val noLinksYet = "Nenhum link ainda"
+    override val noLinksHint = "Cole um link acima; ele fica aqui para quando você precisar."
+    override val noLinksMatch = { query: String -> "Nenhum link com \"$query\"" }
+    override val searchLinks = "Buscar links"
+    override val openLink = "Abrir link"
+    override val copyLink = "Copiar link"
+    override val linkCopied = "Link copiado"
+    override val deleteLink = "Excluir link"
 
     override val privacyIntroTitle = "1. Introdução"
     override val privacyIntroBody =

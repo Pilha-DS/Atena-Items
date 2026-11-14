@@ -25,6 +25,8 @@ import com.openappslabs.jotter.ui.screens.aboutscreen.AboutScreen
 import com.openappslabs.jotter.ui.screens.addcategoryscreen.AddCategoryScreen
 import com.openappslabs.jotter.ui.screens.appearancescreen.AppearanceScreen
 import com.openappslabs.jotter.ui.screens.datamanagementscreen.DataManagementScreen
+import com.openappslabs.jotter.ui.screens.generalnotescreen.GeneralNoteScreen
+import com.openappslabs.jotter.ui.screens.linksscreen.LinksScreen
 import com.openappslabs.jotter.ui.screens.miscellaneousscreen.MiscellaneousScreen
 import com.openappslabs.jotter.ui.screens.homescreen.HomeScreen
 import com.openappslabs.jotter.ui.screens.notedetailscreen.NoteDetailScreen
@@ -53,7 +55,9 @@ fun AppNavHost(
                     navController.navigate(AppRoutes.NoteDetail(category = category))
                 },
                 onAddCategoryClick = { navController.navigate(AppRoutes.AddCategory) },
-                onSettingsClick = { navController.navigate(AppRoutes.Settings) }
+                onSettingsClick = { navController.navigate(AppRoutes.Settings) },
+                onGeneralNoteClick = { navController.navigate(AppRoutes.GeneralNote) },
+                onLinksClick = { navController.navigate(AppRoutes.Links) }
             )
         }
 
@@ -122,6 +126,14 @@ fun AppNavHost(
 
         composable<AppRoutes.SecurityScreen> {
             SecurityScreen(onBackClick = navController::popBackStack)
+        }
+
+        composable<AppRoutes.GeneralNote> {
+            GeneralNoteScreen(onBackClick = navController::popBackStack)
+        }
+
+        composable<AppRoutes.Links> {
+            LinksScreen(onBackClick = navController::popBackStack)
         }
     }
 }

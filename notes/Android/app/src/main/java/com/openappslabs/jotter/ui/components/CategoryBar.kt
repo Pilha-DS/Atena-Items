@@ -29,6 +29,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -41,6 +43,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import com.openappslabs.jotter.data.model.SortDirection
@@ -63,7 +66,10 @@ fun CategoryBar(
     showSortButton: Boolean,
     sortDirection: SortDirection,
     sortType: SortType,
-    onSortClick: () -> Unit
+    onSortClick: () -> Unit,
+    /** Shortcuts that live next to the chips, before the categories. */
+    onGeneralNoteClick: (() -> Unit)? = null,
+    onLinksClick: (() -> Unit)? = null
 ) {
     val listState = rememberLazyListState()
     val density = LocalDensity.current
@@ -116,6 +122,33 @@ fun CategoryBar(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // The two desks the app keeps outside the note list: the general
+            // note and the link inbox. They come first so they stay a thumb
+            // swipe away, no matter how many categories exist.
+            if (onGeneralNoteClick != null) {
+                item(key = "GeneralNoteShortcut") {
+                    ShortcutChip(
+                        label = strings.generalNote,
+                        icon = Icons.Rounded.EditNote,
+                        onClick = {
+                            haptics.click()
+                            onGeneralNoteClick()
+                        }
+                    )
+                }
+            }
+            if (onLinksClick != null) {
+                item(key = "LinksShortcut") {
+                    ShortcutChip(
+                        label = strings.linkInbox,
+                        icon = Icons.Rounded.Link,
+                        onClick = {
+                            haptics.click()
+                            onLinksClick()
+                        }
+                    )
+                }
+            }
             itemsIndexed(
                 items = displayList,
                 key = { _, category -> category }
@@ -183,4 +216,39 @@ fun CategoryBar(
             )
         }
     }
+}
+
+/**
+ * A chip that opens a screen (general note, links) instead of filtering the
+ * list, styled like the "add category" chip so it reads as an action.
+ */
+@Composable
+private fun ShortcutChip(
+    label: String,
+    icon: ImageVector,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = false,
+        onClick = onClick,
+        label = { Text(text = label) },
+        leadingIcon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+        },
+        shape = RoundedCornerShape(8.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            labelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            iconColor = MaterialTheme.colorScheme.primary
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            borderColor = MaterialTheme.colorScheme.outlineVariant,
+            enabled = true,
+            selected = false
+        )
+    )
 }

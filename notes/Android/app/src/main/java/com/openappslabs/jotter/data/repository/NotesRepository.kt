@@ -64,4 +64,14 @@ interface NotesRepository {
 
     suspend fun clearAllDatabaseData()
     suspend fun unlockAllNotes()
+
+    /**
+     * The single persistent "general note" (scratchpad), created on first use.
+     * It is a regular note row flagged as scratchpad, with the fixed
+     * `Scratchpad.UUID`, so it is the same note on every synced device.
+     */
+    suspend fun getOrCreateScratchpad(): Note
+
+    /** Saves the scratchpad text. It has no title, so only `content` changes. */
+    suspend fun saveScratchpad(noteId: Int, content: String)
 }

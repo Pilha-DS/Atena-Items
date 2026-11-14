@@ -58,8 +58,7 @@ class SyncClient(
         explicitNulls = true
     }
 
-    suspend fun ping(config: SyncConfig): Long = withContext(Dispatchers.IO) {
-        val response = execute(
+    suspend fun ping(config: SyncConfig): Long = withContext(Dispatchers.IO) {        val response = execute(
             config = config,
             path = "/api/v1/ping",
             body = null
@@ -74,6 +73,30 @@ class SyncClient(
             val response = execute(config = config, path = "/api/v1/sync", body = body)
             try {
                 json.decodeFromString(SyncResponseDto.serializer(), response)
+            } catch (error: Exception) {
+                throw SyncException(
+                    SyncErrorKind.INVALID_RESPONSE,
+                    "could not read the server response: ${error.message}",
+                    error
+                )
+            }
+        }
+
+    /**
+     * The link inbox uses its own endpoint and cursor. Batching both streams in
+     * one request would mean one slow stream delays the other, and the links
+     * are tiny and independent from the notes.
+     */
+    suspend fun syncLinks(config: SyncConfig, request: SyncLinksRequestDto): SyncLinksResponseDto =
+        withContext(Dispatchers.IO) {
+            val body = json.encodeToString(SyncLinksRequestDto.serializer(), request)
+            val response = execute(
+                config = config,
+                path = "/api/v1/tools/jotter/links/sync",
+                body = body
+            )
+            try {
+                json.decodeFromString(SyncLinksResponseDto.serializer(), response)
             } catch (error: Exception) {
                 throw SyncException(
                     SyncErrorKind.INVALID_RESPONSE,

@@ -20,6 +20,7 @@ import androidx.room.withTransaction
 import com.openappslabs.jotter.data.crypto.NoteCrypto
 import com.openappslabs.jotter.data.model.BackupData
 import com.openappslabs.jotter.data.model.Note
+import com.openappslabs.jotter.data.model.Scratchpad
 import com.openappslabs.jotter.data.source.CategoryDao
 import com.openappslabs.jotter.data.source.JotterDatabase
 import com.openappslabs.jotter.data.source.NoteDao
@@ -180,5 +181,27 @@ class NotesRepositoryImpl @Inject constructor(
 
     override suspend fun unlockAllNotes() {
         noteDao.unlockAllNotes()
+    }
+
+    override suspend fun getOrCreateScratchpad(): Note {
+        noteDao.getScratchpad()?.let { return it }
+        // Created under the fixed scratchpad uuid: the desktop app resolves the
+        // same row from the hub instead of keeping a private copy.
+        //
+        // A brand-new row is *older than everything* and not dirty: if the hub
+        // already holds a general note written on another device, that one has
+        // to win the first sync. Stamping "now" here would let an empty page
+        // overwrite real text by LWW.
+        val draft = Note(isScratchpad = true, uuid = Scratchpad.UUID, createdTime = 0L, updatedTime = 0L)
+        val id = noteDao.insert(draft).toInt()
+        return noteDao.getNoteById(id) ?: draft.copy(id = id)
+    }
+
+    override suspend fun saveScratchpad(noteId: Int, content: String) {
+        noteDao.updateScratchpadContent(
+            noteId = noteId,
+            content = content,
+            updatedTime = System.currentTimeMillis()
+        )
     }
 }

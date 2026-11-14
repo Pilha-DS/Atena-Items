@@ -40,6 +40,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.EditNote
+import androidx.compose.material.icons.rounded.Link
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
@@ -88,7 +89,9 @@ fun SearchBar(
     onScratchpadClick: (() -> Unit)? = null,
     /** Desktop only: shows the toggle of the clipboard editor window. */
     isClipboardVisible: Boolean = false,
-    onClipboardClick: (() -> Unit)? = null
+    onClipboardClick: (() -> Unit)? = null,
+    /** The link inbox: save a URL now, find it later. */
+    onLinksClick: (() -> Unit)? = null
 ) {
     val haptics = rememberJotterHaptics()
     val focusManager = LocalFocusManager.current
@@ -208,6 +211,20 @@ fun SearchBar(
                     keyboardActions = keyboardActions,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            if (onLinksClick != null) {
+                IconButton(onClick = {
+                    haptics.click()
+                    onLinksClick()
+                }) {
+                    Icon(
+                        imageVector = Icons.Rounded.Link,
+                        contentDescription = strings.linkInbox,
+                        tint = onSurfaceVariantColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
 
             if (onClipboardClick != null) {

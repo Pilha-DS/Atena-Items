@@ -81,6 +81,7 @@ fun HomeScreen(
     onAddCategoryClick: () -> Unit,
     onSettingsClick: () -> Unit,
     onProfileClick: () -> Unit,
+    onLinksClick: () -> Unit,
     viewModel: HomeScreenViewModel = viewModel {
         HomeScreenViewModel(
             AppGraph.notesRepository,
@@ -183,6 +184,10 @@ fun HomeScreen(
                 onClipboardClick = {
                     haptics.tick()
                     ClipboardWindow.toggle()
+                },
+                onLinksClick = {
+                    haptics.tick()
+                    onLinksClick()
                 },
                 modifier = Modifier.padding(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 8.dp)
             )

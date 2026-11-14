@@ -33,15 +33,17 @@ import kotlinx.coroutines.flow.Flow
 interface SyncDao {
 
     /**
-     * Notes changed locally that still have to be pushed. The scratchpad is
-     * device-local by design and never leaves the machine; a blank uuid means
+     * Notes changed locally that still have to be pushed. A blank uuid means
      * the row predates the sync migration and has nothing to match on.
+     *
+     * The general note is included: it syncs under the fixed scratchpad uuid,
+     * so the text written on one device shows up on the other.
      */
-    @Query("SELECT * FROM notes WHERE needsSync = 1 AND isScratchpad = 0 AND uuid != ''")
+    @Query("SELECT * FROM notes WHERE needsSync = 1 AND uuid != ''")
     suspend fun getPendingNotes(): List<Note>
 
     /** Used to count "there is something to push" without reading a body. */
-    @Query("SELECT COUNT(*) FROM notes WHERE needsSync = 1 AND isScratchpad = 0 AND uuid != ''")
+    @Query("SELECT COUNT(*) FROM notes WHERE needsSync = 1 AND uuid != ''")
     fun observePendingCount(): Flow<Int>
 
     /** Deletions alone must push too, without waiting for the periodic tick. */

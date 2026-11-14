@@ -54,6 +54,12 @@ sealed interface AppRoutes {
     data object SecurityScreen : AppRoutes
 
     @Serializable
+    data object Links : AppRoutes
+
+    @Serializable
+    data object GeneralNote : AppRoutes
+
+    @Serializable
     data class NoteDetail(
         val noteId: Int = -1,
         val category: String? = null

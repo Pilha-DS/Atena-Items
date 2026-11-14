@@ -49,11 +49,12 @@ fun main() {
     database.init(config.tokenOverride)
     val syncService = SyncService(database)
     val agendaSyncService = AgendaSyncService(database)
+    val linksSyncService = LinksSyncService(database)
 
     printBanner(config, database)
 
     embeddedServer(Netty, port = config.port, host = config.host) {
-        hubModule(database, syncService, agendaSyncService, config)
+        hubModule(database, syncService, agendaSyncService, linksSyncService, config)
     }.start(wait = true)
 }
 
@@ -84,6 +85,7 @@ private fun Application.hubModule(
     database: Database,
     syncService: SyncService,
     agendaSyncService: AgendaSyncService,
+    linksSyncService: LinksSyncService,
     config: Config
 ) {
     install(ContentNegotiation) {
@@ -151,6 +153,7 @@ private fun Application.hubModule(
                         trashed = connection.query("SELECT COUNT(*) FROM notes WHERE is_trashed = 1") { it.getInt(1) } ?: 0,
                         tombstones = connection.query("SELECT COUNT(*) FROM tombstones") { it.getInt(1) } ?: 0,
                         categories = connection.query("SELECT COUNT(*) FROM categories") { it.getInt(1) } ?: 0,
+                        links = connection.query("SELECT COUNT(*) FROM links") { it.getInt(1) } ?: 0,
                         cursor = connection.query(
                             "SELECT value FROM meta WHERE key = ?", Database.KEY_SEQ
                         ) { it.getString(1)?.toLongOrNull() ?: 0L } ?: 0L,
@@ -183,6 +186,16 @@ private fun Application.hubModule(
                 if (!call.requireToken(database)) return@post
                 val request = call.receive<AgendaSyncRequest>()
                 call.respond(agendaSyncService.sync(request, call.request.origin.remoteHost))
+            }
+
+            /**
+             * Jotter link inbox: a third stream, so a links cursor can never be
+             * confused with a notes one. Lives under the tool that owns it.
+             */
+            post("/tools/jotter/links/sync") {
+                if (!call.requireToken(database)) return@post
+                val request = call.receive<LinksSyncRequest>()
+                call.respond(linksSyncService.sync(request, call.request.origin.remoteHost))
             }
         }
     }

@@ -19,6 +19,8 @@
 #include "builtins/system/system-extension.hpp"
 #include "builtins/web/web-extension.hpp"
 #include "builtins/notes/notes-extension.hpp"
+#include "builtins/links/links-extension.hpp"
+#include "builtins/agenda/agenda-extension.hpp"
 #include "builtins/ai/ai-extension.hpp"
 #include "builtins/dictation/dictation-extension.hpp"
 #include "service-registry.hpp"
@@ -48,6 +50,8 @@ CommandDatabase::CommandDatabase(const ServiceRegistry &services) {
   registerRepository<VicinaeExtension>();
   registerRepository<WebExtension>();
   registerRepository<NotesExtension>();
+  registerRepository<LinksExtension>();
+  registerRepository<AgendaExtension>();
   registerRepository<CalculatorExtension>();
   registerRepository<ShortcutExtension>();
 

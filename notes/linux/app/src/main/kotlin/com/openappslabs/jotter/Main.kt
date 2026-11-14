@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -68,6 +69,7 @@ import com.openappslabs.jotter.data.repository.UserPreferences
 import com.openappslabs.jotter.data.source.DatabaseFactory
 import com.openappslabs.jotter.di.AppGraph
 import com.openappslabs.jotter.navigation.AppNavHost
+import com.openappslabs.jotter.navigation.AppRoutes
 import com.openappslabs.jotter.platform.AppLock
 import com.openappslabs.jotter.platform.AutoSave
 import com.openappslabs.jotter.platform.BackDispatcher
@@ -85,6 +87,7 @@ import com.openappslabs.jotter.platform.WindowStateStore
 import com.openappslabs.jotter.platform.Xdg
 import com.openappslabs.jotter.ui.PinDialog
 import com.openappslabs.jotter.ui.screens.clipboardscreen.ClipboardScreen
+import com.openappslabs.jotter.ui.screens.linksscreen.LinksPanel
 import com.openappslabs.jotter.ui.screens.scratchpadscreen.ScratchpadScreen
 import com.openappslabs.jotter.ui.i18n.LocalStrings
 import com.openappslabs.jotter.ui.i18n.stringsFor
@@ -98,6 +101,13 @@ import java.awt.SystemTray
 import kotlin.math.roundToInt
 
 private val WidgetShape = RoundedCornerShape(18.dp)
+
+/**
+ * How the left companion window is divided: the clipboard editor keeps the top
+ * 70%, the link inbox gets the bottom 30%.
+ */
+private const val CLIPBOARD_SHARE = 0.7f
+private const val LINKS_SHARE = 0.3f
 
 /** How long the widget waits, unfocused, before it closes itself. */
 private const val FOCUS_LOSS_DELAY_MS = 250L
@@ -542,11 +552,28 @@ fun main() {
                             ),
                             shadowElevation = 14.dp
                         ) {
-                            ClipboardScreen(
-                                window = window,
-                                onClose = { ClipboardWindow.hide() },
-                                modifier = Modifier.fillMaxSize()
-                            )
+                            // The left column is two desks: the clipboard on
+                            // top, the link inbox as a strip below it. 70/30,
+                            // so the editor still gets the room it had.
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                ClipboardScreen(
+                                    window = window,
+                                    onClose = { ClipboardWindow.hide() },
+                                    modifier = Modifier.weight(CLIPBOARD_SHARE)
+                                )
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 12.dp),
+                                    thickness = 1.dp,
+                                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.35f)
+                                )
+                                LinksPanel(
+                                    modifier = Modifier.weight(LINKS_SHARE),
+                                    onOpenFullScreen = {
+                                        isVisible = true
+                                        navController.navigate(AppRoutes.Links)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -674,6 +701,13 @@ fun main() {
                     appStrings.clipboard,
                     checked = ClipboardWindow.isVisible,
                     onCheckedChange = { if (it) ClipboardWindow.show() else ClipboardWindow.hide() }
+                )
+                Item(
+                    text = appStrings.linkInbox,
+                    onClick = {
+                        isVisible = true
+                        navController.navigate(AppRoutes.Links)
+                    }
                 )
                 Separator()
                 Item(appStrings.quit, onClick = quit)
