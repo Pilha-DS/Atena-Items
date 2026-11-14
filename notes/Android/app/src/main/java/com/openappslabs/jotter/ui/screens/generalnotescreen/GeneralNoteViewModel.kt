@@ -59,6 +59,19 @@ class GeneralNoteViewModel @Inject constructor(
             savedContent = scratchpad.content
             _note.value = scratchpad
             _content.value = scratchpad.content
+
+            // Text written on the desktop arrives as a plain row update, so the
+            // open screen follows the row instead of the snapshot it read when
+            // it was created. A remote version only replaces the editor when
+            // nothing typed here is waiting for the debounce.
+            repository.observeScratchpad().collect { note ->
+                val incoming = note?.content ?: return@collect
+                if (incoming == _content.value) return@collect
+                if (_content.value != savedContent) return@collect
+                savedContent = incoming
+                _note.value = note
+                _content.value = incoming
+            }
         }
     }
 
