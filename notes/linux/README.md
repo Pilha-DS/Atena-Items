@@ -56,6 +56,14 @@ Depois de instalar, adicione o widget: botão direito no painel → **Adicionar 
 systemctl --user restart plasma-plasmashell
 ```
 
+### Atalho global
+
+A entrada `.desktop` declara `X-KDE-Shortcuts=Meta+N`, então o **Super+N** abre e fecha o Jotter de qualquer lugar, mesmo com a janela escondida. O atalho é registrado pelo KGlobalAccel e aparece em **Configurações do sistema → Atalhos → Aplicativos → Jotter**, onde pode ser trocado. Se o atalho não responder logo após uma reinstalação:
+
+```bash
+kbuildsycoca6 --noincremental
+```
+
 ## Dados
 
 As notas ficam no SQLite local do usuário (Room/SQLite). A sincronização com o servidor é configurada em **Configurações → Sincronização** e é opcional.

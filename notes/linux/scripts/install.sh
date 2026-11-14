@@ -89,6 +89,8 @@ Categories=Utility;TextTools;
 Keywords=notes;jotter;notas;
 StartupNotify=false
 StartupWMClass=jotter
+# Global shortcut registered by KGlobalAccel (System Settings -> Shortcuts).
+X-KDE-Shortcuts=Meta+N
 EOF
 
     if command -v update-desktop-database >/dev/null 2>&1; then
@@ -161,7 +163,7 @@ If the widget does not show up in that list, reload the shell:
 
 Day to day:
   panel icon    shows/hides the notes widget
-  Jotter menu   same, via $BIN_DIR/jotter-toggle
+  Super+N       same, from anywhere in the session
   drag the top 12px of the card to move it around the desktop
 
 EOF
