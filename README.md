@@ -24,6 +24,7 @@ notes/
 └── linux/                  # port desktop + widget Plasma 6 (Gradle próprio)
 server/                     # Atena Hub (Gradle próprio + Docker)
 search/                     # fork do Vicinae, build CMake/Ninja
+scripts/                    # ferramentas que cruzam projetos (assinatura Android)
 LICENSE                     # GNU GPL v3.0
 ```
 
@@ -65,6 +66,24 @@ cd search && make release
 
 Cada pasta tem um README com os detalhes: [`agenda/`](agenda), [`notes/`](notes),
 [`server/`](server), [`search/`](search).
+
+## 📦 APK de release (atualização por cima)
+
+Os apps Android têm um cofre de assinatura próprio, **fora do repositório**, em
+`~/.config/atena/android-keys`. Todo build de release passa por
+[`scripts/android-release.sh`](scripts/android-release.sh), que confere a
+assinatura do APK contra o certificado do cofre antes de entregar:
+
+```bash
+./scripts/android-release.sh            # notas + calendário
+./scripts/android-release.sh --check    # valida cofre, aliases e SDK
+./scripts/android-release.sh --bump     # +1 no versionCode e builda
+```
+
+Sem essa chave o Android recusa a atualização e obriga desinstalar — o que apaga
+os dados locais do app. Faça backup do cofre com
+`./scripts/android-release.sh --backup`; a restauração em outra máquina é
+`--restore`. Detalhes em [`scripts/README.md`](scripts/README.md).
 
 ## 🧭 Padrões de desenvolvimento
 
