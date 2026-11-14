@@ -8,7 +8,7 @@ qualquer um deles sem tocar nos outros.
 | --- | --- | --- | --- |
 | [`agenda/`](agenda) | **Agenda** | Calendário (fork do [Fossify Calendar](https://github.com/FossifyOrg/Calendar)) com port Linux e widget do KDE | Kotlin, Jetpack Compose, Compose Desktop |
 | [`notes/`](notes) | **Atena Notes** | App de notas offline-first (Android + port Linux com widget do KDE) | Kotlin, Jetpack Compose, Room, Compose Desktop |
-| [`server/`](server) | **Atena Hub** | Servidor de sincronização das notas + API de leitura para outras ferramentas + tela de admin (`/admin`) | Kotlin, Ktor, SQLite, Docker |
+| [`server/`](server) | **Atena Hub** | Servidor de sincronização das notas + armazenamento universal (registros e arquivos) para apps novos + tela de admin (`/admin`) | Kotlin, Ktor, SQLite, Docker |
 | [`search/`](search) | **@Search** | Launcher de desktop (fork do [Vicinae](https://vicinae.com)) | C++23, Qt 6, QML |
 
 Os projetos se conversam por HTTP: o **Atena Hub** é o ponto de encontro. O app

@@ -1,7 +1,7 @@
 services:
   atena-hub:
     build: .
-    image: atena-hub:2.1.0
+    image: atena-hub:2.2.0
     container_name: atena-hub
     restart: unless-stopped
     ports:
@@ -20,6 +20,10 @@ services:
       # screen does not exist (404).
       ADMIN_USER: ${ADMIN_USER:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      # Universal store caps: one record (document) and one file. Files are
+      # streamed to disk in the same volume, so they survive a restart.
+      ATENA_MAX_RECORD_KB: ${ATENA_MAX_RECORD_KB:-512}
+      ATENA_MAX_BLOB_MB: ${ATENA_MAX_BLOB_MB:-256}
     volumes:
       # The database lives here. Back this volume up; it is your server copy.
       #

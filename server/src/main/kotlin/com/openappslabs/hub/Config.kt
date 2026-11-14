@@ -35,6 +35,8 @@ import java.util.UUID
  *  - `ATENA_TOKEN` / `JOTTER_SERVER_TOKEN`   fixed token; otherwise generated
  *  - `ATENA_PUBLIC_URL` / `JOTTER_PUBLIC_URL` shown on the start page
  *  - `ADMIN_USER` / `ADMIN_PASSWORD`         credentials of the admin screen
+ *  - `ATENA_MAX_RECORD_KB`                   cap for one record of the store
+ *  - `ATENA_MAX_BLOB_MB`                     cap for one uploaded file
  *
  * The admin screen is the only place with a login. Regular clients keep using a
  * token: no accounts, no sessions, nothing to manage on their side.
@@ -46,7 +48,11 @@ data class Config(
     val tokenOverride: String?,
     val publicUrl: String?,
     val adminUser: String? = null,
-    val adminPassword: String? = null
+    val adminPassword: String? = null,
+    /** One record is a document, not a dump: the store keeps it small. */
+    val maxRecordBytes: Long = 512L * 1024L,
+    /** Files are streamed to disk, so the cap can be generous. */
+    val maxBlobBytes: Long = 256L * 1024L * 1024L
 ) {
     /**
      * The admin screen only exists when both credentials are configured.
@@ -72,6 +78,10 @@ data class Config(
     val isUsingLegacyDatabase: Boolean
         get() = databaseFile.fileName.toString() == LEGACY_DATABASE
 
+    /** Files uploaded through the universal store live beside the database. */
+    val blobDir: Path
+        get() = databaseFile.toAbsolutePath().parent.resolve("blobs")
+
     companion object {
         const val LEGACY_DATABASE = "jotter-server.db"
 
@@ -86,7 +96,9 @@ data class Config(
                 tokenOverride = value("ATENA_TOKEN", "JOTTER_SERVER_TOKEN"),
                 publicUrl = value("ATENA_PUBLIC_URL", "JOTTER_PUBLIC_URL"),
                 adminUser = value("ADMIN_USER", "ATENA_ADMIN_USER"),
-                adminPassword = value("ADMIN_PASSWORD", "ATENA_ADMIN_PASSWORD")
+                adminPassword = value("ADMIN_PASSWORD", "ATENA_ADMIN_PASSWORD"),
+                maxRecordBytes = (value("ATENA_MAX_RECORD_KB")?.toLongOrNull() ?: 512L) * 1024L,
+                maxBlobBytes = (value("ATENA_MAX_BLOB_MB")?.toLongOrNull() ?: 256L) * 1024L * 1024L
             )
         }
     }
@@ -95,7 +107,7 @@ data class Config(
 /** Build-time identity, shown by `/health`, `/api/v1/ping` and the start page. */
 object BuildInfo {
     const val NAME = "atena-hub"
-    const val VERSION = "2.1.0"
+    const val VERSION = "2.2.0"
 }
 
 internal fun newToken(): String = UUID.randomUUID().toString().replace("-", "")

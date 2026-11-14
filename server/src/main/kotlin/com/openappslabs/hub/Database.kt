@@ -88,23 +88,26 @@ class Database(private val file: Path) {
     }
 
     /**
-     * Resolves the token a client presented to a label: [MASTER_LABEL] for the
-     * token printed at boot, the label the admin typed for one created in the
-     * admin screen, and `null` when it is wrong or was revoked. A revoked token
-     * stops working on the very next request — no restart needed.
+     * Resolves the token a client presented to a label (and its namespace
+     * scope): [MASTER_LABEL] for the token printed at boot, the label the admin
+     * typed for one created in the admin screen, and `null` when it is wrong or
+     * was revoked. A revoked token stops working on the very next request — no
+     * restart needed.
      */
-    fun tokenLabel(provided: String?): String? {
+    fun tokenIdentity(provided: String?): TokenIdentity? {
         val candidate = provided?.trim()
         if (candidate.isNullOrEmpty()) return null
-        if (matchesMaster(candidate)) return MASTER_LABEL
+        if (matchesMaster(candidate)) return TokenIdentity(MASTER_LABEL, "")
         return read { connection ->
             connection.query(
-                "SELECT label FROM tokens WHERE token = ? AND revoked = 0", candidate
-            ) { it.getString(1) ?: "" }
+                "SELECT label, scope FROM tokens WHERE token = ? AND revoked = 0", candidate
+            ) { TokenIdentity(it.getString(1) ?: "", it.getString(2) ?: "") }
         }
     }
 
-    fun tokenMatches(provided: String?): Boolean = tokenLabel(provided) != null
+    fun tokenLabel(provided: String?): String? = tokenIdentity(provided)?.label
+
+    fun tokenMatches(provided: String?): Boolean = tokenIdentity(provided) != null
 
     fun <T> read(block: (Connection) -> T): T = open().use(block)
 
@@ -243,7 +246,8 @@ class Database(private val file: Path) {
                 label TEXT NOT NULL DEFAULT '',
                 token TEXT NOT NULL UNIQUE,
                 created_at INTEGER NOT NULL,
-                revoked INTEGER NOT NULL DEFAULT 0
+                revoked INTEGER NOT NULL DEFAULT 0,
+                scope TEXT NOT NULL DEFAULT ''
             )
             """.trimIndent(),
             """
@@ -262,10 +266,75 @@ class Database(private val file: Path) {
             )
             """.trimIndent(),
             "CREATE INDEX IF NOT EXISTS index_activity_at ON activity (at)",
-            "CREATE INDEX IF NOT EXISTS index_activity_device ON activity (device_id)"
+            "CREATE INDEX IF NOT EXISTS index_activity_device ON activity (device_id)",
+            /**
+             * The universal store: any app, any collection, opaque payload.
+             * The composite key is what keeps one app's data apart from another
+             * without the server knowing either of them.
+             */
+            """
+            CREATE TABLE IF NOT EXISTS records (
+                namespace TEXT NOT NULL,
+                collection TEXT NOT NULL,
+                record_key TEXT NOT NULL,
+                payload TEXT NOT NULL DEFAULT '',
+                created_time INTEGER NOT NULL,
+                updated_time INTEGER NOT NULL,
+                sync_seq INTEGER NOT NULL,
+                PRIMARY KEY (namespace, collection, record_key)
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_records_stream " +
+                "ON records (namespace, collection, sync_seq)",
+            """
+            CREATE TABLE IF NOT EXISTS record_tombstones (
+                namespace TEXT NOT NULL,
+                collection TEXT NOT NULL,
+                record_key TEXT NOT NULL,
+                deleted_at INTEGER NOT NULL,
+                sync_seq INTEGER NOT NULL,
+                PRIMARY KEY (namespace, collection, record_key)
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_record_tombstones_stream " +
+                "ON record_tombstones (namespace, collection, sync_seq)",
+            /**
+             * File metadata. The bytes live on disk, addressed by `hash`, so a
+             * download never loads a database row and the same content stored
+             * twice occupies one file.
+             */
+            """
+            CREATE TABLE IF NOT EXISTS blobs (
+                namespace TEXT NOT NULL,
+                name TEXT NOT NULL,
+                hash TEXT NOT NULL,
+                size INTEGER NOT NULL,
+                content_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+                created_time INTEGER NOT NULL,
+                updated_time INTEGER NOT NULL,
+                deleted INTEGER NOT NULL DEFAULT 0,
+                deleted_at INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (namespace, name)
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_blobs_hash ON blobs (hash)",
+            "CREATE INDEX IF NOT EXISTS index_blobs_updated ON blobs (namespace, updated_time)"
         )
         connection.createStatement().use { statement ->
             statements.forEach(statement::execute)
+        }
+        // Additive migrations for databases created before these columns
+        // existed: SQLite has no "ADD COLUMN IF NOT EXISTS", so check first.
+        ensureColumn(connection, "tokens", "scope", "TEXT NOT NULL DEFAULT ''")
+    }
+
+    /** Adds [column] to [table] when an older database does not have it yet. */
+    private fun ensureColumn(connection: Connection, table: String, column: String, ddl: String) {
+        val exists = connection.queryList("PRAGMA table_info($table)") { it.getString("name") }
+            .contains(column)
+        if (!exists) {
+            connection.createStatement().use { it.execute("ALTER TABLE $table ADD COLUMN $column $ddl") }
+            log.info("added column {}.{} (schema upgrade)", table, column)
         }
     }
 
@@ -295,23 +364,26 @@ class Database(private val file: Path) {
     // ---------------------------------------------------------------------
 
     /** Creates a token for one more client and returns the secret to show once. */
-    fun createToken(label: String): TokenDto {
+    fun createToken(label: String, scope: String = ""): TokenDto {
         val cleanLabel = label.trim().take(64).ifEmpty { "sem nome" }
+        // Empty scope = every namespace; otherwise a comma-separated allowlist.
+        val cleanScope = scope.trim().take(256)
         val secret = newToken()
         val createdAt = System.currentTimeMillis()
         write { connection ->
             connection.execute(
-                "INSERT INTO tokens(label, token, created_at, revoked) VALUES(?,?,?,0)",
-                cleanLabel, secret, createdAt
+                "INSERT INTO tokens(label, token, created_at, revoked, scope) VALUES(?,?,?,0,?)",
+                cleanLabel, secret, createdAt, cleanScope
             )
         }
-        log.info("token created for \"{}\"", cleanLabel)
+        log.info("token created for \"{}\" (scope: {})", cleanLabel, cleanScope.ifEmpty { "all" })
         return TokenDto(
             id = 0,
             label = cleanLabel,
             prefix = mask(secret),
             createdAt = createdAt,
             revoked = false,
+            scope = cleanScope,
             secret = secret
         )
     }
@@ -321,14 +393,15 @@ class Database(private val file: Path) {
     }
 
     fun tokens(connection: Connection): List<TokenDto> = connection.queryList(
-        "SELECT id, label, token, created_at, revoked FROM tokens ORDER BY created_at DESC"
+        "SELECT id, label, token, created_at, revoked, scope FROM tokens ORDER BY created_at DESC"
     ) {
         TokenDto(
             id = it.getLong(1),
             label = it.getString(2),
             prefix = mask(it.getString(3)),
             createdAt = it.getLong(4),
-            revoked = it.getInt(5) != 0
+            revoked = it.getInt(5) != 0,
+            scope = it.getString(6) ?: ""
         )
     }
 
@@ -436,7 +509,7 @@ class Database(private val file: Path) {
     private fun purgeOldTombstones(connection: Connection): Int {
         val cutoff = System.currentTimeMillis() - TOMBSTONE_DAYS * 24L * 60L * 60L * 1000L
         var removed = 0
-        for (table in listOf("tombstones", "agenda_tombstones", "link_tombstones")) {
+        for (table in listOf("tombstones", "agenda_tombstones", "link_tombstones", "record_tombstones")) {
             removed += connection.prepareStatement("DELETE FROM $table WHERE deleted_at < ?").use { statement ->
                 statement.setLong(1, cutoff)
                 statement.executeUpdate()
@@ -489,10 +562,45 @@ internal fun mask(secret: String): String = when {
 }
 
 /**
+ * Who a request is: the label shown in the admin, and the namespace scope of
+ * the token itself. The scope is carried from authentication, never looked up
+ * by label — two tokens may share a label.
+ */
+data class TokenIdentity(val label: String, val scope: String = "")
+
+/**
  * The key a device is known by. A client that sends no id still shows up, keyed
  * by its address, so the dashboard can list it instead of hiding the traffic.
  */
 internal fun deviceKey(id: String, ip: String): String = id.trim().ifEmpty { "ip:$ip" }.take(128)
+
+// ---------------------------------------------------------------------------
+// Universal store: the namespace/collection cursors and its metadata.
+// ---------------------------------------------------------------------------
+
+/** The store cursor of one collection; `0` when nothing was ever written. */
+internal fun storeSeqKey(namespace: String, collection: String): String =
+    "store_seq:$namespace/$collection"
+
+/**
+ * Whether a token's scope covers [namespace]. An empty scope means "everything"
+ * (the boot token, and the tokens created before scopes existed); otherwise the
+ * scope is a comma-separated list of namespaces, each optionally ending in `*`.
+ */
+internal fun scopeAllows(scope: String, namespace: String): Boolean {
+    val trimmed = scope.trim()
+    if (trimmed.isEmpty() || trimmed == "*") return true
+    return trimmed.split(',')
+        .map(String::trim)
+        .filter(String::isNotEmpty)
+        .any { entry ->
+            when {
+                entry == "*" -> true
+                entry.endsWith("*") -> namespace.startsWith(entry.dropLast(1))
+                else -> namespace == entry
+            }
+        }
+}
 
 /** Small JDBC helpers, kept local to the server. */
 internal fun Connection.execute(sql: String, vararg args: Any?): Int =

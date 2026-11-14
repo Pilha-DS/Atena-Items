@@ -51,11 +51,22 @@ fun main() {
     val syncService = SyncService(database)
     val agendaSyncService = AgendaSyncService(database)
     val linksSyncService = LinksSyncService(database)
+    val storeService = StoreService(database, config.maxRecordBytes)
+    val blobs = BlobStore(config.blobDir, config.maxBlobBytes)
+    blobs.purgeStaleTemporaries()
 
     printBanner(config, database)
 
     embeddedServer(Netty, port = config.port, host = config.host) {
-        hubModule(database, syncService, agendaSyncService, linksSyncService, config)
+        hubModule(
+            database = database,
+            syncService = syncService,
+            agendaSyncService = agendaSyncService,
+            linksSyncService = linksSyncService,
+            storeService = storeService,
+            blobs = blobs,
+            config = config
+        )
     }.start(wait = true)
 }
 
@@ -73,6 +84,7 @@ private fun printBanner(config: Config, database: Database) {
         log.info(" using the previous Jotter database (nothing to migrate)")
     }
     log.info(" tools: {}", Tools.all.joinToString { "${it.id} ${it.version}" })
+    log.info(" store: universal (records + files), no release needed for a new app")
     log.info("")
     log.info(" hub token (treat it like a password):")
     log.info("   {}", token)
@@ -92,6 +104,8 @@ private fun Application.hubModule(
     syncService: SyncService,
     agendaSyncService: AgendaSyncService,
     linksSyncService: LinksSyncService,
+    storeService: StoreService,
+    blobs: BlobStore,
     config: Config
 ) {
     install(ContentNegotiation) {
@@ -141,7 +155,7 @@ private fun Application.hubModule(
 
         // The admin screen is HTML and lives outside /api: it authenticates
         // with ADMIN_USER/ADMIN_PASSWORD, not with a client token.
-        adminRoutes(config, database)
+        adminRoutes(config, database, storeService)
 
         route("/api/v1") {
             get("/ping") {
@@ -224,6 +238,13 @@ private fun Application.hubModule(
                     )
                 )
             }
+
+            /**
+             * The universal store. It is not a tool: it is what a *new* tool
+             * uses instead of asking for a new endpoint here. Records have a
+             * cursor per namespace/collection; files are content-addressed.
+             */
+            storeApi(config, database, storeService, blobs)
         }
     }
 }

@@ -12,6 +12,8 @@ funcionando normalmente e sincroniza quando voltar.
 - Autenticação por **token único**, gerado no primeiro boot
 - Conflito resolvido por **LWW** (`updatedTime` do cliente vence)
 - Notas criptografadas trafegam e ficam armazenadas **apenas como ciphertext**
+- **Armazenamento universal**: coleções de documentos e arquivos para qualquer
+  app novo, sem endpoint novo e sem republicar o servidor
 - Nada de telemetria, nada de terceiros
 
 O nome antigo (`jotter-server`) continua aceito: o hub reaproveita o banco
@@ -32,9 +34,10 @@ No log aparece o token na primeira subida:
 
 ```
 ================================================================
- Atena Hub 2.1.0 listening on 0.0.0.0:8080
+ Atena Hub 2.2.0 listening on 0.0.0.0:8080
  data file: /data/jotter-server.db
  tools: jotter 2.5.0, agenda 0.1.0
+ store: universal (records + files), no release needed for a new app
 
  hub token (treat it like a password):
    3791a9b5ad4a45c7bb45534cbaa67a9c
@@ -113,6 +116,8 @@ tokens. Sem essas duas variáveis a tela não existe (responde 404).
 | `ATENA_PUBLIC_URL` | vazio | Só um texto de ajuda na página inicial |
 | `ADMIN_USER` | vazio | Usuário da tela `/admin` (junto com `ADMIN_PASSWORD` a habilita) |
 | `ADMIN_PASSWORD` | vazio | Senha da tela `/admin` |
+| `ATENA_MAX_RECORD_KB` | `512` | Tamanho máximo de um registro do store universal |
+| `ATENA_MAX_BLOB_MB` | `256` | Tamanho máximo de um arquivo enviado ao store |
 
 Os nomes antigos (`JOTTER_PORT`, `JOTTER_HOST_PORT`, `JOTTER_DATA_DIR`,
 `JOTTER_SERVER_TOKEN`, `JOTTER_PUBLIC_URL`) continuam funcionando. Os do admin
@@ -143,11 +148,12 @@ O que a página mostra:
 
 | Bloco | Conteúdo |
 | --- | --- |
-| Cartões | dispositivos, notas, links, eventos, categorias, lixeira |
+| Cartões | dispositivos, notas, links, eventos, categorias, lixeira, registros do store e arquivos |
 | Dispositivos | nome, id, IP, último sync (relativo e absoluto), último stream, itens enviados/baixados, volume em KB/MB, token usado, nº de rodadas |
-| Últimas sincronizações | uma linha por sync: quando, aparelho, stream (`notas`/`links`/`agenda`), itens enviados/baixados, bytes recebidos/devolvidos, IP e token |
-| Tokens | rótulo, prefixo mascarado, data de criação, estado (ativo/revogado) e botão de revogar |
-| Novo token | cria um token para um cliente e mostra o valor **uma única vez** |
+| Últimas sincronizações | uma linha por sync: quando, aparelho, stream (`notas`/`links`/`agenda`/`store:namespace/coleção`), itens enviados/baixados, bytes recebidos/devolvidos, IP e token |
+| Armazenamento universal | cada namespace/coleção que algum app criou: registros, removidos, volume, cursor e última escrita |
+| Tokens | rótulo, prefixo mascarado, escopo de namespaces, data de criação, estado (ativo/revogado) e botão de revogar |
+| Novo token | cria um token com escopo opcional para um cliente e mostra o valor **uma única vez** |
 
 ### Tokens
 
@@ -218,9 +224,10 @@ do aparelho — nem no backup do servidor ela aparece.
 ### Limitações conhecidas
 
 - **Uma instância = um conjunto de notas.** O token é a credencial de acesso;
-  não há contas separadas por pessoa. Para dois usuários, rode dois containers
-  com volumes diferentes.
-- **A nota geral (scratchpad) não sincroniza**: ela é local de cada aparelho.
+  não há contas separadas por pessoa. No armazenamento universal dá para isolar
+  por namespace com o escopo do token, mas `/api/v1/sync`, links e agenda
+  continuam compartilhando o mesmo conjunto. Para dois usuários totalmente
+  separados, rode dois containers com volumes diferentes.
 - **Exclusão de categoria não é propagada** (categorias são união de nomes). Uma
   categoria apagada num aparelho pode reaparecer se o outro ainda a tiver.
   Excluir a categoria no segundo aparelho resolve.
@@ -241,6 +248,128 @@ expandidas: cada ocorrência é uma linha, como no app.
 
 ---
 
+## Armazenamento universal
+
+Um app novo — lista de tarefas, cofre de senhas, galeria, save de jogo, qualquer
+coisa — **não precisa de endpoint novo nem de uma nova versão do servidor**. Ele
+escolhe um *namespace* (o nome do app) e usa uma das duas primitivas:
+
+| Primitiva | Para quê | Rota |
+| --- | --- | --- |
+| **registros** | documentos pequenos: JSON, texto, configuração, estado | `/api/v1/store/{namespace}/{coleção}/...` |
+| **arquivos** | bytes grandes: imagem, áudio, PDF, backup | `/api/v1/blobs/{namespace}/{nome}` |
+
+O hub não interpreta o payload: um registro é uma string opaca e um arquivo é
+um fluxo de bytes. É isso que permite um app novo existir só no cliente. Para
+saber se o hub já tem essa camada, `GET /api/v1/ping` responde
+`"universalStore": true`.
+
+### Registros
+
+| Método | Rota | Efeito |
+| --- | --- | --- |
+| `POST` | `/api/v1/store/{ns}/{coleção}/sync` | push + pull na mesma transação, com cursor da coleção |
+| `GET` | `/api/v1/store/{ns}/{coleção}/records/{chave}` | um registro |
+| `PUT` | `/api/v1/store/{ns}/{coleção}/records/{chave}` | grava o corpo como payload (relógio do servidor) |
+| `GET` | `/api/v1/store` | descobre namespaces/coleções que já têm dados |
+
+O `sync` segue o mesmo contrato das notas, porque é o mesmo problema: **LWW**
+pelo `updatedTime`, *tombstones* para deleções e um cursor monotônico **por
+`namespace/coleção`** (o cursor de `tarefas/items` nunca se mistura com o de
+`jogo/saves`).
+
+```bash
+# enviar dois itens e receber o que mudou desde o cursor 0
+curl -s -X POST http://IP:8080/api/v1/store/tarefas/items/sync \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  -d '{
+    "cursor": 0,
+    "deviceId": "celular-1",
+    "deviceName": "Celular",
+    "records": [
+      { "key": "t1", "payload": "{\"titulo\":\"comprar pão\",\"feito\":false}",
+        "createdTime": 1730000000000, "updatedTime": 1730000000000 }
+    ],
+    "deletions": []
+  }'
+```
+
+Resposta (mesma forma da API de notas):
+
+```json
+{
+  "cursor": 1,
+  "serverTime": 1730000001234,
+  "records": [
+    { "key": "t1", "payload": "{\"titulo\":\"comprar pão\",\"feito\":false}",
+      "createdTime": 1730000000000, "updatedTime": 1730000000000 }
+  ],
+  "deletions": []
+}
+```
+
+- `payload` é devolvido **byte a byte**; o app decide se é JSON, texto ou base64.
+- O `cursor` da resposta vai na próxima chamada; `0` baixa a coleção inteira.
+- Versão mais velha é ignorada; deleção vira *tombstone* e viaja para os outros
+  aparelhos. Editar algo apagado há mais tempo ressuscita o registro, como nas
+  notas.
+- Limite por registro: `ATENA_MAX_RECORD_KB` (padrão 512 KB). Acima disso, use
+  arquivo.
+
+### Arquivos
+
+| Método | Rota | Efeito |
+| --- | --- | --- |
+| `PUT` | `/api/v1/blobs/{ns}/{nome}` | envia o corpo como arquivo; `Content-Type` é preservado |
+| `GET` | `/api/v1/blobs/{ns}/{nome}` | baixa os bytes; `ETag` + `If-None-Match` devolvem **304** |
+| `HEAD` | `/api/v1/blobs/{ns}/{nome}` | só metadados (tamanho, tipo, hash) |
+| `DELETE` | `/api/v1/blobs/{ns}/{nome}` | marca como removido e libera os bytes |
+| `GET` | `/api/v1/blobs?namespace={ns}&includeDeleted=1` | lista os metadados do namespace |
+
+```bash
+curl -s -X PUT http://IP:8080/api/v1/blobs/fotos/2026/ferias.jpg \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: image/jpeg" \
+  --data-binary @ferias.jpg
+```
+
+- Os bytes ficam em `DATA_DIR/blobs/<2 primeiros do hash>/<sha256>`, fora do
+  SQLite: o download é um *stream* do disco, sem carregar linha nem binário na
+  memória.
+- **Deduplicação real por conteúdo**: o mesmo arquivo enviado por dois apps (ou
+  com dois nomes) ocupa um único arquivo. Apagar um nome não quebra o outro; os
+  bytes só saem quando o último nome que aponta para eles some.
+- O `hash` retornado é o SHA-256 e também é o `ETag`. Um cliente que já tem a
+  versão baixada revalida com uma resposta 304 de poucos bytes.
+- Arquivos removidos ficam na listagem como `deleted: true` (para o outro
+  aparelho saber o que apagar); o conteúdo não é mais servido (404).
+- Limite por arquivo: `ATENA_MAX_BLOB_MB` (padrão 256 MB).
+
+### Namespaces e escopo dos tokens
+
+Namespace e coleção são identificadores curtos (`[A-Za-z0-9][A-Za-z0-9._-]*`,
+até 64 caracteres); a chave do registro é opaca (até 512). Nada é pré-cadastrado:
+o primeiro `sync`/`PUT` de um namespace cria a coleção. O painel `/admin` passa
+a listá-la em **Armazenamento universal**.
+
+Cada token criado no `/admin` aceita um **escopo** opcional: lista separada por
+vírgula de namespaces, com `*` no final para prefixo. Vazio = todos. Exemplo:
+`fotos,notas*,tarefas`. Um token escopado recebe **403** em qualquer outro
+namespace, inclusive na listagem e nos arquivos. O token do boot (master) nunca
+é restringido.
+
+### Por que não pesa na resposta
+
+- O pull lê só a janela `sync_seq > cursor`, com índice composto
+  `(namespace, collection, sync_seq)`; o payload não é lido fora dela.
+- WAL já ligado, uma transação por rodada, sem parsing do payload no servidor.
+- Arquivos não passam pelo SQLite e o download vai direto do disco; ETag evita
+  baixar de novo o que não mudou; conteúdo repetido é gravado uma vez.
+- Medido localmente (1 vCPU): 1.000 registros de ~100 B → push em ~0,27 s, pull
+  completo em ~0,05 s, pull sem novidade em ~0,01 s; upload de 3 MB em ~0,12 s.
+
+---
+
 ## API
 
 Todas as rotas `/api/*` exigem `Authorization: Bearer <token>` (ou
@@ -257,8 +386,17 @@ Todas as rotas `/api/*` exigem `Authorization: Bearer <token>` (ou
 | `GET` | `/api/v1/tools/jotter/notes/{uuid}` | Uma nota |
 | `POST` | `/api/v1/tools/jotter/links/sync` | Push + pull dos links |
 | `POST` | `/api/v1/tools/agenda/sync` | Push + pull dos eventos da Agenda |
+| `POST` | `/api/v1/store/{ns}/{coleção}/sync` | Push + pull de uma coleção genérica |
+| `GET` | `/api/v1/store/{ns}/{coleção}/records/{chave}` | Um registro genérico |
+| `PUT` | `/api/v1/store/{ns}/{coleção}/records/{chave}` | Grava um registro (corpo = payload) |
+| `GET` | `/api/v1/store` | Namespaces/coleções existentes e seus cursores |
+| `PUT` | `/api/v1/blobs/{ns}/{nome}` | Envia um arquivo (binário) |
+| `GET` | `/api/v1/blobs/{ns}/{nome}` | Baixa um arquivo (ETag / 304) |
+| `HEAD` | `/api/v1/blobs/{ns}/{nome}` | Metadados de um arquivo |
+| `DELETE` | `/api/v1/blobs/{ns}/{nome}` | Remove um arquivo |
+| `GET` | `/api/v1/blobs?namespace={ns}` | Lista metadados dos arquivos |
 | `GET` | `/admin` | Painel de acompanhamento (Basic auth de `ADMIN_USER`) |
-| `POST` | `/admin/tokens` | Cria um token (`label`) e mostra o valor uma vez |
+| `POST` | `/admin/tokens` | Cria um token (`label`, `scope`) e mostra o valor uma vez |
 | `POST` | `/admin/tokens/{id}/revoke` | Revoga um token na hora |
 | `GET` | `/admin/logout` | Descarta as credenciais em cache do navegador |
 

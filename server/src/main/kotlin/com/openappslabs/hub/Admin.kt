@@ -46,12 +46,13 @@ import java.util.Base64
  *  - how much each one sent and received, per stream and in total;
  *  - which tokens are valid, and the button that creates and revokes them.
  */
-fun Route.adminRoutes(config: Config, database: Database) {
+fun Route.adminRoutes(config: Config, database: Database, storeService: StoreService) {
 
     get("/admin") {
         if (!call.requireAdmin(config)) return@get
-        call.respondHtml(renderDashboard(config, database))
+        call.respondHtml(renderDashboard(config, database, storeService))
     }
+
     post("/admin/tokens") {
         if (!call.requireAdmin(config)) return@post
         // A form posted by another origin is refused: the browser would send
@@ -60,8 +61,8 @@ fun Route.adminRoutes(config: Config, database: Database) {
             call.respond(HttpStatusCode.Forbidden, ErrorResponse("cross-site request refused"))
             return@post
         }
-        val label = call.receiveParameters()["label"].orEmpty()
-        val created = database.createToken(label)
+        val form = call.receiveParameters()
+        val created = database.createToken(form["label"].orEmpty(), form["scope"].orEmpty())
         call.respondHtml(renderCreatedToken(created))
     }
 
@@ -77,7 +78,7 @@ fun Route.adminRoutes(config: Config, database: Database) {
             return@post
         }
         database.revokeToken(id)
-        call.respondHtml(renderDashboard(config, database, notice = "Token revogado."))
+        call.respondHtml(renderDashboard(config, database, storeService, notice = "Token revogado."))
     }
 
     /**
@@ -140,12 +141,21 @@ private class Dashboard(
     val links: Int,
     val events: Int,
     val categories: Int,
+    val records: Int,
+    val blobs: Int,
+    val blobBytes: Long,
+    val streams: List<StoreStreamDto>,
     val devices: List<DeviceSummaryDto>,
     val activity: List<ActivityDto>,
     val tokens: List<TokenDto>
 )
 
-private fun renderDashboard(config: Config, database: Database, notice: String? = null): String {
+private fun renderDashboard(
+    config: Config,
+    database: Database,
+    storeService: StoreService,
+    notice: String? = null
+): String {
     val data = runCatching {
         database.read { connection ->
             Dashboard(
@@ -154,6 +164,12 @@ private fun renderDashboard(config: Config, database: Database, notice: String? 
                 links = connection.query("SELECT COUNT(*) FROM links") { it.getInt(1) } ?: 0,
                 events = connection.query("SELECT COUNT(*) FROM agenda_events") { it.getInt(1) } ?: 0,
                 categories = connection.query("SELECT COUNT(*) FROM categories") { it.getInt(1) } ?: 0,
+                records = connection.query("SELECT COUNT(*) FROM records") { it.getInt(1) } ?: 0,
+                blobs = connection.query("SELECT COUNT(*) FROM blobs WHERE deleted = 0") { it.getInt(1) } ?: 0,
+                blobBytes = connection.query(
+                    "SELECT COALESCE(SUM(size), 0) FROM blobs WHERE deleted = 0"
+                ) { it.getLong(1) } ?: 0L,
+                streams = storeService.streams(),
                 devices = database.deviceSummaries(connection),
                 activity = database.recentActivity(connection),
                 tokens = listOf(database.masterTokenDto(connection)) + database.tokens(connection)
@@ -224,15 +240,37 @@ private fun renderDashboard(config: Config, database: Database, notice: String? 
                 </form>
             """.trimIndent()
         }
+        val scope = if (token.scope.isBlank()) {
+            """<span class="muted">todos</span>"""
+        } else {
+            """<span class="mono">${escapeHtml(token.scope)}</span>"""
+        }
         """
         <tr>
           <td>${escapeHtml(token.label)}</td>
           <td class="mono">${escapeHtml(token.prefix)}</td>
+          <td>$scope</td>
           <td class="muted nowrap">${formatTime(token.createdAt)}</td>
           <td>$state</td>
           <td>$action</td>
         </tr>
         """.trimIndent()
+    }
+
+    val streamRows = data.streams.joinToString("") { stream ->
+        """
+        <tr>
+          <td class="mono">${escapeHtml(stream.namespace)}</td>
+          <td class="mono">${escapeHtml(stream.collection)}</td>
+          <td class="num">${stream.records}</td>
+          <td class="num muted">${stream.deleted}</td>
+          <td class="num muted">${formatBytes(stream.bytes)}</td>
+          <td class="num muted">${stream.cursor}</td>
+          <td class="muted nowrap">${relative(stream.lastWrite)}</td>
+        </tr>
+        """.trimIndent()
+    }.ifEmpty {
+        """<tr><td colspan="7" class="muted">Nenhum app usou o armazenamento universal ainda.</td></tr>"""
     }
 
     val noticeHtml = notice?.let { """<p class="notice">${escapeHtml(it)}</p>""" } ?: ""
@@ -310,6 +348,8 @@ private fun renderDashboard(config: Config, database: Database, notice: String? 
               <div class="card"><b>${data.events}</b><span>eventos</span></div>
               <div class="card"><b>${data.categories}</b><span>categorias</span></div>
               <div class="card"><b>${data.trashed}</b><span>na lixeira</span></div>
+              <div class="card"><b>${data.records}</b><span>registros do store</span></div>
+              <div class="card"><b>${data.blobs}</b><span>arquivos · ${formatBytes(data.blobBytes)}</span></div>
             </div>
 
             <h2>Dispositivos</h2>
@@ -337,12 +377,26 @@ private fun renderDashboard(config: Config, database: Database, notice: String? 
             </table>
             </div>
 
+            <h2>Armazenamento universal</h2>
+            <p class="muted">Coleções que algum app já criou. Um app novo só escolhe um
+            namespace e uma coleção — não precisa de endpoint novo no servidor.</p>
+            <div class="scroll">
+            <table>
+              <tr>
+                <th>Namespace</th><th>Coleção</th><th class="num">Registros</th>
+                <th class="num">Removidos</th><th class="num">Volume</th>
+                <th class="num">Cursor</th><th>Última escrita</th>
+              </tr>
+              $streamRows
+            </table>
+            </div>
+
             <h2>Tokens</h2>
             <p class="muted">Cada app usa um token. O token completo só aparece uma vez,
             no momento em que é criado; se perder, revogue e crie outro.</p>
             <div class="scroll">
             <table>
-              <tr><th>Rótulo</th><th>Token</th><th>Criado</th><th>Estado</th><th></th></tr>
+              <tr><th>Rótulo</th><th>Token</th><th>Escopo</th><th>Criado</th><th>Estado</th><th></th></tr>
               $tokenRows
             </table>
             </div>
@@ -350,6 +404,7 @@ private fun renderDashboard(config: Config, database: Database, notice: String? 
             <h2>Novo token</h2>
             <form method="post" action="/admin/tokens" class="create">
               <input type="text" name="label" maxlength="64" placeholder="ex.: celular do João" required>
+              <input type="text" name="scope" maxlength="256" placeholder="namespaces, ex.: midia,tarefas (vazio = todos)">
               <button type="submit" class="primary">Criar token</button>
             </form>
 
@@ -393,6 +448,7 @@ private fun renderCreatedToken(created: TokenDto): String {
           <main>
             <h1>Token criado</h1>
             <p>Rótulo: <strong>${escapeHtml(created.label)}</strong></p>
+            <p class="muted">Escopo: <strong>${escapeHtml(created.scope.ifBlank { "todos os namespaces" })}</strong></p>
             <p class="muted">Cole este valor em <em>Configurações → Sync</em> no app:</p>
             <p class="secret">${escapeHtml(secret)}</p>
             <p class="warn">Ele não será mostrado de novo. Se perder, revogue este e crie outro.</p>
@@ -416,10 +472,12 @@ private fun messagePage(title: String, message: String): String = """
 """.trimIndent()
 
 /** The stream sizes are labelled the same way everywhere on the page. */
-private fun streamBadge(stream: String): String = when (stream) {
-    "notes" -> """<span class="tag">notas</span>"""
-    "links" -> """<span class="tag">links</span>"""
-    "agenda" -> """<span class="tag">agenda</span>"""
+private fun streamBadge(stream: String): String = when {
+    stream == "notes" -> """<span class="tag">notas</span>"""
+    stream == "links" -> """<span class="tag">links</span>"""
+    stream == "agenda" -> """<span class="tag">agenda</span>"""
+    stream.startsWith("store:") ->
+        """<span class="tag">store</span> <span class="muted mono">${escapeHtml(stream.removePrefix("store:"))}</span>"""
     else -> """<span class="muted">—</span>"""
 }
 

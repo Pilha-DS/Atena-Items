@@ -115,6 +115,72 @@ check "links older push ignored (LWW)" "https://example.com/a" "$(jq_get "$r" "[
 r=$(lk "{\"cursor\":0,\"deletions\":[{\"uuid\":\"$L1\",\"deletedAt\":4000}]}")
 check "links deletion removes the link" "0" "$(jq_get "$r" "len([l for l in json.load(sys.stdin)['links'] if l['uuid']=='$L1'])")"
 
+# ---- universal store: a new app needs no endpoint here -------------------
+STORE_NS="e2e-store-$SUFFIX"
+st() { curl -s --noproxy '*' -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$1" "$B/api/v1/store/$STORE_NS/items/sync"; }
+
+r=$(st "{\"cursor\":0,\"deviceId\":\"dev-$SUFFIX\",\"deviceName\":\"Store $SUFFIX\",\"records\":[{\"key\":\"r1\",\"payload\":\"um\",\"createdTime\":1000,\"updatedTime\":2000}]}")
+check "store push creates the record" "um" "$(jq_get "$r" "[x for x in json.load(sys.stdin)['records'] if x['key']=='r1'][0]['payload']" 2>/dev/null || echo "-")"
+check "store cursor starts at the collection" "1" "$(jq_get "$r" "json.load(sys.stdin)['cursor']")"
+
+r=$(curl -s --noproxy '*' -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{\"cursor\":0}" "$B/api/v1/store/$STORE_NS/other/sync")
+check "another collection has its own cursor" "0" "$(jq_get "$r" "json.load(sys.stdin)['cursor']")"
+
+r=$(st "{\"cursor\":0,\"records\":[{\"key\":\"r1\",\"payload\":\"velho\",\"updatedTime\":1500}]}")
+check "store older push ignored (LWW)" "um" "$(jq_get "$r" "[x for x in json.load(sys.stdin)['records'] if x['key']=='r1'][0]['payload']")"
+
+r=$(st "{\"cursor\":0,\"records\":[{\"key\":\"r1\",\"payload\":\"dois\",\"updatedTime\":3000}]}")
+check "store newer push wins (LWW)" "dois" "$(jq_get "$r" "[x for x in json.load(sys.stdin)['records'] if x['key']=='r1'][0]['payload']")"
+
+r=$(st "{\"cursor\":0,\"deletions\":[{\"key\":\"r1\",\"deletedAt\":4000}]}")
+check "store deletion creates a tombstone" "r1" "$(jq_get "$r" "[d for d in json.load(sys.stdin)['deletions'] if d['key']=='r1'][0]['key']")"
+
+r=$(st "{\"cursor\":0,\"records\":[{\"key\":\"r1\",\"payload\":\"fantasma\",\"updatedTime\":3500}]}")
+check "store record older than deletion stays dead" "0" "$(jq_get "$r" "len([x for x in json.load(sys.stdin)['records'] if x['key']=='r1'])")"
+
+r=$(st "{\"cursor\":0,\"records\":[{\"key\":\"r1\",\"payload\":\"voltou\",\"updatedTime\":5000}]}")
+check "store record newer than deletion comes back" "voltou" "$(jq_get "$r" "[x for x in json.load(sys.stdin)['records'] if x['key']=='r1'][0]['payload']")"
+
+r=$(curl -s --noproxy '*' -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"a":1}' "$B/api/v1/store/$STORE_NS/config/records/ui")
+check "store single PUT stores the payload" '{"a":1}' "$(jq_get "$r" "json.load(sys.stdin)['payload']")"
+
+r=$(curl -s --noproxy '*' -H "Authorization: Bearer $TOKEN" "$B/api/v1/store/$STORE_NS/config/records/ui")
+check "store single GET returns it" '{"a":1}' "$(jq_get "$r" "json.load(sys.stdin)['payload']")"
+
+r=$(curl -s --noproxy '*' -H "Authorization: Bearer $TOKEN" "$B/api/v1/store")
+check "store discovery lists the namespace" "1" "$(jq_get "$r" "len([s for s in json.load(sys.stdin)['streams'] if s['namespace']=='$STORE_NS' and s['collection']=='items'])")"
+
+# ---- universal store: files, streamed and content-addressed --------------
+BLOB_NS="e2e-files-$SUFFIX"
+BLOB_FILE="/tmp/atena-e2e-$SUFFIX.txt"
+BLOB_DOWN="/tmp/atena-e2e-down-$SUFFIX.txt"
+printf 'conteudo do e2e %s\n' "$SUFFIX" > "$BLOB_FILE"
+BLOB_SIZE=$(wc -c < "$BLOB_FILE" | tr -d ' ')
+
+r=$(curl -s --noproxy '*' -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: text/plain" --data-binary "@$BLOB_FILE" "$B/api/v1/blobs/$BLOB_NS/nota.txt")
+HASH=$(jq_get "$r" "json.load(sys.stdin)['hash']")
+check "blob upload returns the size" "$BLOB_SIZE" "$(jq_get "$r" "json.load(sys.stdin)['size']")"
+check "blob upload keeps the content type" "text/plain" "$(jq_get "$r" "json.load(sys.stdin)['contentType']")"
+
+curl -s --noproxy '*' -H "Authorization: Bearer $TOKEN" -o "$BLOB_DOWN" "$B/api/v1/blobs/$BLOB_NS/nota.txt"
+check "blob download is byte-identical" "0" "$(cmp -s "$BLOB_FILE" "$BLOB_DOWN" && echo 0 || echo 1)"
+
+check "blob ETag is the sha256" "1" "$(curl -s --noproxy '*' -D - -o /dev/null -H "Authorization: Bearer $TOKEN" "$B/api/v1/blobs/$BLOB_NS/nota.txt" | grep -qi "ETag: \"$HASH\"" && echo 1 || echo 0)"
+check "blob revalidation -> 304" "304" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" -H "If-None-Match: \"$HASH\"" "$B/api/v1/blobs/$BLOB_NS/nota.txt")"
+check "blob HEAD reports the size" "$BLOB_SIZE" "$(curl -s --noproxy '*' -I -H "Authorization: Bearer $TOKEN" "$B/api/v1/blobs/$BLOB_NS/nota.txt" | grep -i '^Content-Length:' | tr -d '\r' | cut -d' ' -f2)"
+
+# same content under another name: same hash (deduplicated on disk)
+r=$(curl -s --noproxy '*' -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: text/plain" --data-binary "@$BLOB_FILE" "$B/api/v1/blobs/$BLOB_NS/copia.txt")
+check "same content deduplicates" "$HASH" "$(jq_get "$r" "json.load(sys.stdin)['hash']")"
+
+r=$(curl -s --noproxy '*' -H "Authorization: Bearer $TOKEN" "$B/api/v1/blobs?namespace=$BLOB_NS")
+check "blob list shows both names" "2" "$(jq_get "$r" "len(json.load(sys.stdin)['blobs'])")"
+
+check "blob delete answers 204" "204" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X DELETE -H "Authorization: Bearer $TOKEN" "$B/api/v1/blobs/$BLOB_NS/copia.txt")"
+check "deleted blob is gone" "404" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$B/api/v1/blobs/$BLOB_NS/copia.txt")"
+check "the other name still downloads" "200" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$B/api/v1/blobs/$BLOB_NS/nota.txt")"
+rm -f "$BLOB_FILE" "$BLOB_DOWN"
+
 # ---- admin screen: login, token creation, revoke --------------------------
 if [ -n "${ADMIN_USER:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
   AUTH="-u $ADMIN_USER:$ADMIN_PASSWORD"
@@ -132,6 +198,12 @@ if [ -n "${ADMIN_USER:-}" ] && [ -n "${ADMIN_PASSWORD:-}" ]; then
   check "revoking a token answers 200" "200" "$(curl -s --noproxy '*' $AUTH -o /dev/null -w "%{http_code}" -X POST "$B/admin/tokens/$TID/revoke")"
   check "revoked token -> 401" "401" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $NEWTOK" "$B/api/v1/ping")"
   check "master token still works" "200" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -H "Authorization: Bearer $TOKEN" "$B/api/v1/ping")"
+
+  # a scoped token only reaches the namespaces it names
+  created=$(curl -s --noproxy '*' $AUTH -X POST -d "label=scope-$SUFFIX" -d "scope=$STORE_NS" "$B/admin/tokens")
+  STOK=$(echo "$created" | python3 -c "import sys,re;m=re.search(r'class=\"secret\">([^<]+)<',sys.stdin.read());print(m.group(1) if m else '')")
+  check "scoped token reaches its namespace" "200" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $STOK" -H "Content-Type: application/json" -d '{"cursor":0}' "$B/api/v1/store/$STORE_NS/items/sync")"
+  check "scoped token refused in another namespace" "403" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $STOK" -H "Content-Type: application/json" -d '{"cursor":0}' "$B/api/v1/store/outro-$SUFFIX/items/sync")"
 else
   echo "SKIP  admin checks — start the server with ADMIN_USER and ADMIN_PASSWORD"
 fi

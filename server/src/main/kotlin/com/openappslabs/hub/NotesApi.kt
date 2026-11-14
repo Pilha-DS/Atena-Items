@@ -169,11 +169,12 @@ internal suspend fun ApplicationCall.requireToken(database: Database): Boolean {
         else -> request.headers["X-Jotter-Token"]?.trim()
             ?: request.headers["X-Atena-Token"]?.trim()
     }
-    val label = database.tokenLabel(provided)
+    val label = database.tokenIdentity(provided)
     if (label != null) {
         // Kept on the call so the route can say who synced, without reading the
         // header (and the database) a second time.
-        attributes.put(CallerLabel, label)
+        attributes.put(CallerLabel, label.label)
+        attributes.put(CallerScope, label.scope)
         return true
     }
     respond(HttpStatusCode.Unauthorized, ErrorResponse("invalid or missing token"))
@@ -183,7 +184,14 @@ internal suspend fun ApplicationCall.requireToken(database: Database): Boolean {
 /** Label of the token that passed [requireToken]; empty when there is none. */
 internal fun ApplicationCall.caller(): String = attributes.getOrNull(CallerLabel).orEmpty()
 
+/**
+ * Namespace scope of the token that passed [requireToken]. Empty means every
+ * namespace (the boot token, and tokens created before scopes existed).
+ */
+internal fun ApplicationCall.callerScope(): String = attributes.getOrNull(CallerScope).orEmpty()
+
 private val CallerLabel = io.ktor.util.AttributeKey<String>("atena.caller")
+private val CallerScope = io.ktor.util.AttributeKey<String>("atena.caller.scope")
 
 private const val DEFAULT_LIMIT = 20
 private const val MAX_LIMIT = 500

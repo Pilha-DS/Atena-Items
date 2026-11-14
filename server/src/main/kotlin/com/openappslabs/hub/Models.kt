@@ -90,7 +90,9 @@ data class SyncResponse(
 data class PingResponse(
     val status: String = "ok",
     val serverTime: Long = 0L,
-    val version: String = BuildInfo.VERSION
+    val version: String = BuildInfo.VERSION,
+    /** Capability flag: this hub hosts the universal store (records + files). */
+    val universalStore: Boolean = true
 )
 
 @Serializable
@@ -127,6 +129,8 @@ data class TokenDto(
     val prefix: String = "",
     val createdAt: Long = 0L,
     val revoked: Boolean = false,
+    /** Empty = every namespace; otherwise a comma-separated allowlist. */
+    val scope: String = "",
     val secret: String? = null
 )
 
@@ -172,6 +176,95 @@ data class SyncActivity(
     val pulled: Int = 0,
     val bytesIn: Long = 0L,
     val bytesOut: Long = 0L
+)
+
+// ---------------------------------------------------------------------------
+// Universal store: any app, any shape of data, no server release required.
+// ---------------------------------------------------------------------------
+
+/**
+ * One record of the universal store.
+ *
+ * The hub never looks inside [payload]: it is the app's own JSON (or plain
+ * text), stored and returned byte for byte. That is what lets a new app use
+ * the hub without a new endpoint here — the server only understands the
+ * envelope (key, clocks, cursor), not the content.
+ *
+ * [updatedTime] is the client clock and decides last-write-wins, exactly like
+ * on a note.
+ */
+@Serializable
+data class StoreRecordDto(
+    val key: String = "",
+    val payload: String = "",
+    val createdTime: Long = 0L,
+    val updatedTime: Long = 0L
+)
+
+@Serializable
+data class StoreDeletionDto(
+    val key: String = "",
+    val deletedAt: Long = 0L
+)
+
+@Serializable
+data class StoreSyncRequest(
+    /** Cursor of this collection only; `0` means "send me everything". */
+    val cursor: Long = 0L,
+    val deviceId: String = "",
+    val deviceName: String = "",
+    val records: List<StoreRecordDto> = emptyList(),
+    val deletions: List<StoreDeletionDto> = emptyList()
+)
+
+@Serializable
+data class StoreSyncResponse(
+    val cursor: Long = 0L,
+    val serverTime: Long = 0L,
+    val records: List<StoreRecordDto> = emptyList(),
+    val deletions: List<StoreDeletionDto> = emptyList()
+)
+
+/** A namespace/collection pair that already holds data. */
+@Serializable
+data class StoreStreamDto(
+    val namespace: String = "",
+    val collection: String = "",
+    val records: Int = 0,
+    val deleted: Int = 0,
+    val bytes: Long = 0L,
+    val cursor: Long = 0L,
+    val lastWrite: Long = 0L
+)
+
+@Serializable
+data class StoreStreamsResponse(
+    val streams: List<StoreStreamDto> = emptyList()
+)
+
+/**
+ * Metadata of an uploaded file. The bytes never travel in JSON: they are
+ * content-addressed on disk and fetched by the same [name].
+ *
+ * [hash] is the SHA-256 of the content, used both as the ETag and as the
+ * deduplication key: the same file uploaded by two apps is stored once.
+ */
+@Serializable
+data class BlobDto(
+    val namespace: String = "",
+    val name: String = "",
+    val hash: String = "",
+    val size: Long = 0L,
+    val contentType: String = "application/octet-stream",
+    val createdTime: Long = 0L,
+    val updatedTime: Long = 0L,
+    val deleted: Boolean = false
+)
+
+@Serializable
+data class BlobListResponse(
+    val namespace: String = "",
+    val blobs: List<BlobDto> = emptyList()
 )
 
 // ---------------------------------------------------------------------------
