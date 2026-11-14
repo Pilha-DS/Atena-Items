@@ -1,0 +1,19 @@
+{
+  "KPlugin": {
+    "Authors": [
+      {
+        "Name": "Open Apps Labs"
+      }
+    ],
+    "Category": "Date and Time",
+    "Description": "Mostra hora, data e os eventos de hoje da Agenda",
+    "Icon": "agenda",
+    "Id": "org.agenda.widget",
+    "License": "GPL-3.0-or-later",
+    "Name": "Agenda",
+    "Version": "1.0.0",
+    "Website": "https://github.com/OpenAppsLabs/Atena-Notes"
+  },
+  "KPackageStructure": "Plasma/Applet",
+  "X-Plasma-API-Minimum-Version": "6.0"
+}

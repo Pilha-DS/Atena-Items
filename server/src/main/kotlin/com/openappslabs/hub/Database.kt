@@ -158,6 +158,30 @@ class Database(private val file: Path) {
             """.trimIndent(),
             "CREATE INDEX IF NOT EXISTS index_categories_sync_seq ON categories (sync_seq)",
             """
+            CREATE TABLE IF NOT EXISTS agenda_events (
+                uuid TEXT PRIMARY KEY,
+                title TEXT NOT NULL DEFAULT '',
+                description TEXT NOT NULL DEFAULT '',
+                location TEXT NOT NULL DEFAULT '',
+                start_time INTEGER NOT NULL,
+                end_time INTEGER NOT NULL,
+                is_all_day INTEGER NOT NULL DEFAULT 0,
+                color TEXT NOT NULL DEFAULT '',
+                created_time INTEGER NOT NULL,
+                updated_time INTEGER NOT NULL,
+                sync_seq INTEGER NOT NULL
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_agenda_events_sync_seq ON agenda_events (sync_seq)",
+            """
+            CREATE TABLE IF NOT EXISTS agenda_tombstones (
+                uuid TEXT PRIMARY KEY,
+                deleted_at INTEGER NOT NULL,
+                sync_seq INTEGER NOT NULL
+            )
+            """.trimIndent(),
+            "CREATE INDEX IF NOT EXISTS index_agenda_tombstones_sync_seq ON agenda_tombstones (sync_seq)",
+            """
             CREATE TABLE IF NOT EXISTS devices (
                 id TEXT PRIMARY KEY,
                 name TEXT NOT NULL DEFAULT '',
@@ -194,10 +218,14 @@ class Database(private val file: Path) {
 
     private fun purgeOldTombstones(connection: Connection): Int {
         val cutoff = System.currentTimeMillis() - TOMBSTONE_DAYS * 24L * 60L * 60L * 1000L
-        return connection.prepareStatement("DELETE FROM tombstones WHERE deleted_at < ?").use { statement ->
-            statement.setLong(1, cutoff)
-            statement.executeUpdate()
+        var removed = 0
+        for (table in listOf("tombstones", "agenda_tombstones")) {
+            removed += connection.prepareStatement("DELETE FROM $table WHERE deleted_at < ?").use { statement ->
+                statement.setLong(1, cutoff)
+                statement.executeUpdate()
+            }
         }
+        return removed
     }
 
     private fun meta(connection: Connection, key: String): String? =
@@ -220,6 +248,9 @@ class Database(private val file: Path) {
     companion object {
         const val KEY_TOKEN = "auth_token"
         const val KEY_SEQ = "sync_seq"
+
+        /** The agenda has its own stream, so its clients' cursors are independent. */
+        const val KEY_AGENDA_SEQ = "agenda_sync_seq"
         private const val KEY_CREATED = "created_at"
         private const val TOMBSTONE_DAYS = 180L
     }

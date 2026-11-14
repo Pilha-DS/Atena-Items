@@ -6,7 +6,7 @@ qualquer um deles sem tocar nos outros.
 
 | Pasta | Projeto | O que é | Stack |
 | --- | --- | --- | --- |
-| [`agenda/`](agenda) | **Agenda** | Calendário (fork do [Fossify Calendar](https://github.com/FossifyOrg/Calendar)) | Kotlin, Jetpack Compose |
+| [`agenda/`](agenda) | **Agenda** | Calendário (fork do [Fossify Calendar](https://github.com/FossifyOrg/Calendar)) com port Linux e widget do KDE | Kotlin, Jetpack Compose, Compose Desktop |
 | [`notes/`](notes) | **Atena Notes** | App de notas offline-first (Android + port Linux com widget do KDE) | Kotlin, Jetpack Compose, Room, Compose Desktop |
 | [`server/`](server) | **Atena Hub** | Servidor de sincronização das notas + API de leitura para outras ferramentas | Kotlin, Ktor, SQLite, Docker |
 | [`search/`](search) | **@Search** | Launcher de desktop (fork do [Vicinae](https://vicinae.com)) | C++23, Qt 6, QML |
@@ -16,7 +16,9 @@ de notas sincroniza com ele e qualquer outra ferramenta lê as notas por
 `/api/v1/tools/jotter/notes` em vez de abrir o banco do app.
 
 ```
-agenda/                     # fork do Fossify Calendar, Gradle próprio
+agenda/
+├── android/                # app Android (fork do Fossify, Gradle próprio)
+└── linux/                  # port desktop + widget Plasma 6 (Gradle próprio)
 notes/
 ├── Android/                # app Android (Gradle próprio)
 └── linux/                  # port desktop + widget Plasma 6 (Gradle próprio)
@@ -29,7 +31,8 @@ LICENSE                     # GNU GPL v3.0
 
 | Projeto | Para buildar |
 | --- | --- |
-| `agenda` | JDK 17+ (recomendado 21), Android SDK API 36 |
+| `agenda/android` | JDK 17+ (recomendado 21), Android SDK API 36 |
+| `agenda/linux` | JDK 21, KDE Plasma 6 (só para o widget) |
 | `notes/Android` | JDK 17+ (recomendado 21), Android SDK API 36 |
 | `notes/linux` | JDK 21, KDE Plasma 6 + KWin (só para o widget) |
 | `server` | JDK 21 **ou** Docker + Docker Compose |
@@ -42,7 +45,10 @@ o Gradle.
 
 ```bash
 # agenda — Android
-cd agenda && ./gradlew :app:assembleDebug
+cd agenda/android && ./gradlew :app:assembleDebug
+
+# agenda — desktop Linux (+ widget do painel)
+cd agenda/linux && ./gradlew :app:run
 
 # notas — Android
 cd notes/Android && ./gradlew :app:assembleDebug

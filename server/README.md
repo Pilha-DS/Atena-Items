@@ -165,6 +165,18 @@ do aparelho — nem no backup do servidor ela aparece.
 - Sem HTTPS embutido. Para expor fora da LAN, coloque atrás de um reverse proxy
   (Caddy, Traefik, Nginx) com TLS.
 
+### Agenda
+
+Os eventos da Agenda (Linux) usam o **mesmo contrato** em
+`POST /api/v1/tools/agenda/sync`, com cursor próprio (`agenda_sync_seq`): um
+cursor de notas nunca se confunde com um de eventos. O merge é LWW por
+`updatedTime`, igual ao das notas — o servidor guarda a versão mais nova que
+recebeu, e devolve a vencedora para quem perdeu.
+
+O evento carrega `title`, `description`, `location`, `startTime`, `endTime`,
+`allDay` e uma `color` opcional (`#RRGGBB`). Séries recorrentes não são
+expandidas: cada ocorrência é uma linha, como no app.
+
 ---
 
 ## API
@@ -178,9 +190,10 @@ Todas as rotas `/api/*` exigem `Authorization: Bearer <token>` (ou
 | `GET` | `/api/v1/ping` | Valida URL + token |
 | `POST` | `/api/v1/sync` | Push + pull |
 | `GET` | `/api/v1/stats` | Contadores + aparelhos que já sincronizaram |
-| `GET` | `/api/v1/tools` | Ferramentas que o hub publica (hoje: `jotter`) |
+| `GET` | `/api/v1/tools` | Ferramentas que o hub publica (`jotter`, `agenda`) |
 | `GET` | `/api/v1/tools/jotter/notes` | Leitura das notas (busca por `q`, `category`, `limit`) |
 | `GET` | `/api/v1/tools/jotter/notes/{uuid}` | Uma nota |
+| `POST` | `/api/v1/tools/agenda/sync` | Push + pull dos eventos da Agenda |
 
 Exemplo:
 

@@ -162,6 +162,84 @@ fun RichTextView(
     }
 }
 
+/**
+ * Compact preview of [text] for the note cards.
+ *
+ * It runs the same parser as the reader so the card follows the note's format
+ * (a Markdown note shows no `###`, an HTML note shows no tags), but flattens
+ * every block into one paragraph: the card only has a couple of lines, so
+ * block layout would be wasted there.
+ */
+@Composable
+fun rememberRichPreview(
+    text: String,
+    format: NoteFormat,
+    maxChars: Int = 280
+): AnnotatedString {
+    val palette = RichPalette(
+        codeBackground = MaterialTheme.colorScheme.surfaceContainerHighest,
+        link = MaterialTheme.colorScheme.primary
+    )
+    return remember(text, format, palette, maxChars) {
+        previewRichText(text, format, palette, maxChars)
+    }
+}
+
+internal fun previewRichText(
+    source: String,
+    format: NoteFormat,
+    palette: RichPalette,
+    maxChars: Int = 280
+): AnnotatedString {
+    if (source.isBlank()) return AnnotatedString("")
+    return buildAnnotatedString {
+        var consumed = 0
+        for (block in parseRichText(source, format, palette)) {
+            if (consumed >= maxChars) break
+            if (block.style == RichBlockStyle.DIVIDER) continue
+            // Code (a fenced block, a whole JSON/XML note) is flattened to a
+            // single line: the pretty printed layout is for the reader.
+            val text = when (block.style) {
+                RichBlockStyle.CODE -> AnnotatedString(
+                    block.text.text.replace(PREVIEW_WHITESPACE, " ").trim()
+                )
+                else -> block.text
+            }
+            if (text.text.isBlank()) continue
+            val remaining = maxChars - consumed
+            // Cutting a block in half loses its inline styles; that only ever
+            // affects the tail, which the card elides anyway.
+            val piece = if (text.length <= remaining) text
+            else AnnotatedString(text.text.takeChars(remaining))
+            if (length > 0) append(' ')
+            consumed += piece.length
+            when (block.style) {
+                RichBlockStyle.BULLET -> append("• ")
+                RichBlockStyle.NUMBER -> append("${block.number}. ")
+                else -> Unit
+            }
+            val start = length
+            append(piece)
+            val style = when (block.style) {
+                RichBlockStyle.HEADING -> SpanStyle(fontWeight = FontWeight.Bold)
+                RichBlockStyle.CODE -> SpanStyle(fontFamily = FontFamily.Monospace)
+                else -> null
+            }
+            if (style != null) addStyle(style, start, length)
+        }
+    }
+}
+
+private val PREVIEW_WHITESPACE = Regex("[\\t\\r\\n ]+")
+
+/** `take` that never splits a surrogate pair in half. */
+private fun String.takeChars(max: Int): String = when {
+    length <= max -> this
+    max <= 0 -> ""
+    Character.isLowSurrogate(this[max]) -> substring(0, max - 1)
+    else -> substring(0, max)
+}
+
 private fun headingStyle(level: Int): TextStyle = when (level) {
     1 -> TextStyle(fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Bold)
     2 -> TextStyle(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.Bold)
@@ -206,6 +284,9 @@ private val MD_NUMBER = Regex("^(\\d{1,3})[.)]\\s+(.*)$")
 
 private val MD_INLINE = Regex(
     "`([^`]+)`" +
+        // Images cannot be displayed, so the alt text stands in for them. It
+        // must come before the link rule, otherwise the leading `!` leaks out.
+        "|!\\[([^\\]]*)]\\([^)]*\\)" +
         "|\\*\\*([^*]+)\\*\\*" +
         "|__([^_]+)__" +
         "|\\*([^*]+)\\*" +
@@ -329,40 +410,40 @@ private fun inlineMarkdown(text: String, palette: RichPalette): AnnotatedString 
         for (match in MD_INLINE.findAll(text)) {
             if (match.range.first > last) append(text.substring(last, match.range.first))
             val groups = match.groups
+            val code = groups[1]?.value
+            val imageAlt = groups[2]?.value
+            val bold = groups[3]?.value ?: groups[4]?.value
+            val italic = groups[5]?.value ?: groups[6]?.value
+            val strike = groups[7]?.value
+            val link = groups[8]?.value
             when {
-                groups[1] != null -> withStyle(
+                code != null -> withStyle(
                     SpanStyle(
                         fontFamily = FontFamily.Monospace,
                         background = palette.codeBackground
                     )
-                ) { append(groups[1]!!.value) }
+                ) { append(code) }
 
-                groups[2] != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                    append(groups[2]!!.value)
+                imageAlt != null -> append(imageAlt)
+
+                bold != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                    append(bold)
                 }
 
-                groups[3] != null -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                    append(groups[3]!!.value)
+                italic != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
+                    append(italic)
                 }
 
-                groups[4] != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                    append(groups[4]!!.value)
-                }
-
-                groups[5] != null -> withStyle(SpanStyle(fontStyle = FontStyle.Italic)) {
-                    append(groups[5]!!.value)
-                }
-
-                groups[6] != null -> withStyle(
+                strike != null -> withStyle(
                     SpanStyle(textDecoration = TextDecoration.LineThrough)
-                ) { append(groups[6]!!.value) }
+                ) { append(strike) }
 
-                groups[7] != null -> withStyle(
+                link != null -> withStyle(
                     SpanStyle(
                         color = palette.link,
                         textDecoration = TextDecoration.Underline
                     )
-                ) { append(groups[7]!!.value) }
+                ) { append(link) }
             }
             last = match.range.last + 1
         }

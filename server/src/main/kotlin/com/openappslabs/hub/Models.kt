@@ -110,6 +110,57 @@ data class ErrorResponse(
     val error: String
 )
 
+// ---------------------------------------------------------------------------
+// Agenda: events, independent of the notes contract.
+// ---------------------------------------------------------------------------
+
+/**
+ * An event as it travels between the Agenda clients.
+ *
+ * `updatedTime` is the client clock and decides last-write-wins, exactly like
+ * on a note. A recurring series is not expanded: the client stores the events
+ * it created, one row each.
+ */
+@Serializable
+data class AgendaEventDto(
+    val uuid: String = "",
+    val title: String = "",
+    val description: String = "",
+    val location: String = "",
+    /** Epoch millis. An all-day event spans local midnight to local midnight. */
+    val startTime: Long = 0L,
+    val endTime: Long = 0L,
+    val allDay: Boolean = false,
+    /** Optional accent color, as `#RRGGBB`. */
+    val color: String = "",
+    val createdTime: Long = 0L,
+    val updatedTime: Long = 0L
+)
+
+@Serializable
+data class AgendaDeletionDto(
+    val uuid: String = "",
+    val deletedAt: Long = 0L
+)
+
+@Serializable
+data class AgendaSyncRequest(
+    /** Cursor of the agenda stream, not the notes one. `0` means everything. */
+    val cursor: Long = 0L,
+    val deviceId: String = "",
+    val deviceName: String = "",
+    val events: List<AgendaEventDto> = emptyList(),
+    val deletions: List<AgendaDeletionDto> = emptyList()
+)
+
+@Serializable
+data class AgendaSyncResponse(
+    val cursor: Long = 0L,
+    val serverTime: Long = 0L,
+    val events: List<AgendaEventDto> = emptyList(),
+    val deletions: List<AgendaDeletionDto> = emptyList()
+)
+
 
 // ---------------------------------------------------------------------------
 // Hub: the server is a host for several tools, not only the notes sync.

@@ -6,11 +6,13 @@ alwaysApply: true
 # Estrutura do monorepo
 
 ```
-agenda/         Fossify Calendar, fork do upstream versionado junto (Gradle próprio)
-notes/Android/  app Android (Gradle próprio)
-notes/linux/    port desktop + widget Plasma 6 (Gradle próprio)
-server/         Atena Hub (Gradle próprio + Docker)
-search/         Vicinae, fork do upstream versionado junto (CMake/Ninja)
+agenda/
+├── android/      app Android (fork do Fossify, Gradle próprio)
+└── linux/        port desktop + widget Plasma 6 (Gradle próprio)
+notes/Android/    app Android (Gradle próprio)
+notes/linux/      port desktop + widget Plasma 6 (Gradle próprio)
+server/           Atena Hub (Gradle próprio + Docker)
+search/           Vicinae, fork do upstream versionado junto (CMake/Ninja)
 ```
 
 ## Regras
@@ -37,7 +39,8 @@ search/         Vicinae, fork do upstream versionado junto (CMake/Ninja)
 
 | Onde | Comando |
 | --- | --- |
-| `agenda` | `./gradlew :app:assembleDebug` · `:app:testDebugUnitTest` |
+| `agenda/android` | `./gradlew :app:assembleDebug` · `:app:testDebugUnitTest` |
+| `agenda/linux` | `./gradlew :app:run` · `:app:createDistributable` · `build` |
 | `notes/Android` | `./gradlew :app:assembleDebug` · `:app:testDebugUnitTest` |
 | `notes/linux` | `./gradlew :app:run` · `:app:createDistributable` · `build` |
 | `server` | `./gradlew run` · `test` · `docker compose up -d --build` |

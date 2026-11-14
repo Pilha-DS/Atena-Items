@@ -264,4 +264,4 @@ class SyncService(private val database: Database) {
     }
 }
 
-private fun Boolean.toInt(): Int = if (this) 1 else 0
+internal fun Boolean.toInt(): Int = if (this) 1 else 0

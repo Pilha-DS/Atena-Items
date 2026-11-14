@@ -75,6 +75,30 @@ sync "{\"cursor\":0,\"deviceId\":\"dev-$SUFFIX\",\"deviceName\":\"Tester $SUFFIX
 r=$(curl -s --noproxy '*' -H "Authorization: Bearer $TOKEN" "$B/api/v1/stats")
 check "device appears in stats" "Tester $SUFFIX" "$(jq_get "$r" "[d for d in json.load(sys.stdin)['devices'] if d['id']=='dev-$SUFFIX'][0]['name']")"
 
+# ---- agenda: own stream and cursor, same LWW contract ---------------------
+as() { curl -s --noproxy '*' -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "$1" "$B/api/v1/tools/agenda/sync"; }
+
+r=$(curl -s --noproxy '*' -H "Authorization: Bearer $TOKEN" "$B/api/v1/tools")
+check "tools lists the agenda" "1" "$(jq_get "$r" "len([t for t in json.load(sys.stdin)['tools'] if t['id']=='agenda'])")"
+
+E1="ev-$SUFFIX"
+r=$(as "{\"cursor\":0,\"events\":[{\"uuid\":\"$E1\",\"title\":\"daily\",\"startTime\":1000,\"endTime\":2000,\"createdTime\":1000,\"updatedTime\":2000}]}")
+check "agenda push creates the event" "daily" "$(jq_get "$r" "[e for e in json.load(sys.stdin)['events'] if e['uuid']=='$E1'][0]['title']" 2>/dev/null || echo "-")"
+check "agenda event carries its times" "2000" "$(jq_get "$r" "[e for e in json.load(sys.stdin)['events'] if e['uuid']=='$E1'][0]['endTime']" 2>/dev/null || echo "-")"
+
+r=$(as "{\"cursor\":0,\"events\":[{\"uuid\":\"$E1\",\"title\":\"old\",\"updatedTime\":1000}]}")
+check "agenda older push ignored (LWW)" "daily" "$(jq_get "$r" "[e for e in json.load(sys.stdin)['events'] if e['uuid']=='$E1'][0]['title']")"
+
+r=$(as "{\"cursor\":0,\"events\":[{\"uuid\":\"$E1\",\"title\":\"new\",\"updatedTime\":3000}]}")
+check "agenda newer push wins (LWW)" "new" "$(jq_get "$r" "[e for e in json.load(sys.stdin)['events'] if e['uuid']=='$E1'][0]['title']")"
+
+r=$(as "{\"cursor\":0,\"deletions\":[{\"uuid\":\"$E1\",\"deletedAt\":4000}]}")
+check "agenda deletion removes the event" "0" "$(jq_get "$r" "len([e for e in json.load(sys.stdin)['events'] if e['uuid']=='$E1'])")"
+
+# the notes stream must not see the agenda rows, and vice versa
+r=$(sync '{"cursor":0}')
+check "agenda rows stay out of the notes stream" "0" "$(jq_get "$r" "len([n for n in json.load(sys.stdin)['notes'] if n['uuid']=='$E1'])")"
+
 # malformed body
 check "malformed JSON -> 400" "400" "$(curl -s --noproxy '*' -o /dev/null -w "%{http_code}" -X POST -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d '{"cursor": nope}' "$B/api/v1/sync")"
 

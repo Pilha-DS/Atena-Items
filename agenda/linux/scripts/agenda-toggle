@@ -1,0 +1,147 @@
+#!/usr/bin/env bash
+#
+# Helper used by the Plasma panel widget and by the .desktop launcher.
+#
+#   agenda-toggle                       show/hide the running app, or start it
+#   agenda-toggle anchor X Y W H        same, but tells the app the screen
+#                                       rectangle of the panel icon so the
+#                                       window opens right below/next to it
+#   agenda-toggle sync                  ask the running app to sync now (or
+#                                       start it, which syncs on launch)
+#   agenda-toggle status                print the status JSON read by the widget
+#   agenda-toggle prewarm               start the app hidden if it is not
+#                                       running yet, so the first click is
+#                                       instant (cold start costs ~2 s)
+#
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agenda"
+APP_BIN="${AGENDA_BIN:-$HOME/.local/opt/agenda/bin/agenda}"
+
+# The app publishes the directory it actually uses; fall back to the same
+# rules the app applies when there is no running instance yet.
+ipc_dir() {
+    local published=""
+    if [[ -f "$CONFIG_DIR/ipc-dir" ]]; then
+        published="$(head -n 1 "$CONFIG_DIR/ipc-dir" 2>/dev/null || true)"
+    fi
+    if [[ -n "$published" && -d "$published" ]]; then
+        printf '%s\n' "$published"
+        return
+    fi
+    if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" && -w "$XDG_RUNTIME_DIR" ]]; then
+        printf '%s\n' "$XDG_RUNTIME_DIR/agenda"
+        return
+    fi
+    printf '%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}/agenda/run"
+}
+
+# The IPC directory a process would resolve from its own environment, which is
+# how the app computes it. A stray instance started from another HOME or
+# XDG_RUNTIME_DIR (a test run, another session) must not swallow the click:
+# it watches a file nobody else writes to.
+pid_ipc_dir() {
+    local pid="$1"
+    local environ="/proc/$pid/environ"
+    [[ -r "$environ" ]] || return 1
+
+    local runtime cache home
+    runtime="$(tr '\0' '\n' < "$environ" 2>/dev/null \
+        | sed -n 's|^XDG_RUNTIME_DIR=||p' | head -n 1)"
+    if [[ -n "$runtime" && -d "$runtime" && -w "$runtime" ]]; then
+        printf '%s\n' "$runtime/agenda"
+        return 0
+    fi
+
+    cache="$(tr '\0' '\n' < "$environ" 2>/dev/null \
+        | sed -n 's|^XDG_CACHE_HOME=||p' | head -n 1)"
+    home="$(tr '\0' '\n' < "$environ" 2>/dev/null \
+        | sed -n 's|^HOME=||p' | head -n 1)"
+    printf '%s\n' "${cache:-${home:-$HOME}/.cache}/agenda/run"
+}
+
+# True when an Agenda instance is alive *and* listening on $DIR.
+is_running() {
+    local pid
+    while read -r pid; do
+        [[ -z "$pid" ]] && continue
+        [[ "$pid" == "$$" ]] && continue
+        if [[ "$(pid_ipc_dir "$pid" 2>/dev/null)" == "$DIR" ]]; then
+            return 0
+        fi
+    done < <({
+        pgrep -x agenda 2>/dev/null || true
+        pgrep -f 'java .*com\.openappslabs\.agenda\.MainKt' 2>/dev/null || true
+    } | sort -u)
+    return 1
+}
+
+DIR="$(ipc_dir)"
+
+if [[ "${1:-}" == "status" ]]; then
+    if [[ -f "$DIR/agenda.status.json" ]]; then
+        cat "$DIR/agenda.status.json"
+    else
+        printf '%s\n' '{"generatedAt":0,"todayCount":0,"nextTitle":null,"nextStart":null,"events":[],"sync":{"configured":false,"lastSyncAt":0}}'
+    fi
+    exit 0
+fi
+
+mkdir -p "$DIR"
+
+# A click that starts the app pays the whole JVM/Compose warm-up. The widget
+# calls this when Plasma loads, so the process is already there and the first
+# click only shows the window.
+if [[ "${1:-}" == "prewarm" ]]; then
+    is_running && exit 0
+    if [[ ! -x "$APP_BIN" ]]; then
+        APP_BIN="$(command -v agenda || true)"
+    fi
+    [[ -n "$APP_BIN" && -x "$APP_BIN" ]] || exit 0
+    setsid nohup "$APP_BIN" --hidden >>"$DIR/agenda.log" 2>&1 &
+    exit 0
+fi
+
+case "${1:-}" in
+    anchor)
+        shift
+        # Optional leading "anchor X Y W H": remember where the panel icon is,
+        # so the window can be placed just below it.
+        if [[ $# -ge 4 ]] \
+            && [[ "$1" =~ ^-?[0-9]+$ ]] && [[ "$2" =~ ^-?[0-9]+$ ]] \
+            && [[ "$3" =~ ^[0-9]+$ ]] && [[ "$4" =~ ^[0-9]+$ ]]; then
+            printf '%s %s %s %s\n' "$1" "$2" "$3" "$4" > "$DIR/agenda.anchor"
+        fi
+        ;;
+    sync)
+        if is_running; then
+            # The running instance watches this file and syncs on change.
+            printf '%s\n' "$(date +%s%N)" > "$DIR/agenda.sync"
+            exit 0
+        fi
+        ;;
+    toggle | "") ;;
+    *)
+        echo "usage: agenda-toggle [toggle|prewarm|sync|status|anchor X Y W H]" >&2
+        exit 2
+        ;;
+esac
+
+if is_running; then
+    # The running instance watches this file and flips its visibility. The
+    # content, not the mtime, identifies the click: a click that lands while
+    # the app is still booting must not be mistaken for the previous one.
+    printf '%s\n' "$(date +%s%N)" > "$DIR/agenda.toggle"
+    exit 0
+fi
+
+if [[ ! -x "$APP_BIN" ]]; then
+    APP_BIN="$(command -v agenda || true)"
+fi
+
+if [[ -z "$APP_BIN" ]] || [[ ! -x "$APP_BIN" ]]; then
+    echo "agenda-toggle: Agenda is not installed (expected at \$HOME/.local/opt/agenda/bin/agenda)" >&2
+    exit 1
+fi
+
+setsid nohup "$APP_BIN" >"$DIR/agenda.log" 2>&1 &

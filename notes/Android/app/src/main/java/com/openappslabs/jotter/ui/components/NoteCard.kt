@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -84,13 +85,16 @@ fun NoteCard(
 
     val format = remember(note.format) { NoteFormat.fromKey(note.format) }
 
-    val displayContent = remember(note.content, note.isLocked, isEncryptionLocked, isGridView, strings) {
+    // Locked notes keep the short message; everything else previews through the
+    // note's own format, the same way the reader renders it.
+    val lockMessage = remember(note.isLocked, isEncryptionLocked, isGridView, strings) {
         when {
             isEncryptionLocked -> strings.unlockToRead
             note.isLocked && !isGridView -> strings.lockedNote
-            else -> note.content
+            else -> null
         }
     }
+    val preview = rememberRichPreview(note.content, format)
 
     val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
     val contentColor = remember(note.isLocked, isEncryptionLocked, onSurfaceVariant) {
@@ -214,7 +218,7 @@ fun NoteCard(
                     }
                 } else {
                     Text(
-                        text = displayContent,
+                        text = lockMessage?.let { AnnotatedString(it) } ?: preview,
                         style = MaterialTheme.typography.bodyMedium,
                         color = contentColor,
                         maxLines = if (isGridView) 4 else 2,

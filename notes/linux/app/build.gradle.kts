@@ -48,6 +48,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.jetbrains.navigation.compose)
+
+    testImplementation(kotlin("test"))
 }
 
 ksp {

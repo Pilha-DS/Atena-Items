@@ -48,11 +48,12 @@ fun main() {
     val database = Database(config.databaseFile)
     database.init(config.tokenOverride)
     val syncService = SyncService(database)
+    val agendaSyncService = AgendaSyncService(database)
 
     printBanner(config, database)
 
     embeddedServer(Netty, port = config.port, host = config.host) {
-        hubModule(database, syncService, config)
+        hubModule(database, syncService, agendaSyncService, config)
     }.start(wait = true)
 }
 
@@ -82,6 +83,7 @@ private fun printBanner(config: Config, database: Database) {
 private fun Application.hubModule(
     database: Database,
     syncService: SyncService,
+    agendaSyncService: AgendaSyncService,
     config: Config
 ) {
     install(ContentNegotiation) {
@@ -172,6 +174,16 @@ private fun Application.hubModule(
 
             // Read API used by other tools (read-only consumers of the notes).
             jotterNotesApi(database)
+
+            /**
+             * Agenda: events have their own stream and cursor. The path is
+             * namespaced by tool, unlike the legacy `/sync` kept for Jotter.
+             */
+            post("/tools/agenda/sync") {
+                if (!call.requireToken(database)) return@post
+                val request = call.receive<AgendaSyncRequest>()
+                call.respond(agendaSyncService.sync(request, call.request.origin.remoteHost))
+            }
         }
     }
 }

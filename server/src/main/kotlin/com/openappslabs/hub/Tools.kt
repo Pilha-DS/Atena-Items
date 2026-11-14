@@ -37,8 +37,15 @@ object Tools {
         version = "2.5.0"
     )
 
-    /** Everything this hub hosts. Today: only the notes. */
-    val all: List<ToolInfo> = listOf(JOTTER)
+    val AGENDA = ToolInfo(
+        id = "agenda",
+        name = "Agenda",
+        description = "Eventos da Agenda (Linux): sincronização entre o hub e o desktop.",
+        version = "0.1.0"
+    )
+
+    /** Everything this hub hosts. */
+    val all: List<ToolInfo> = listOf(JOTTER, AGENDA)
 
     fun find(id: String): ToolInfo? = all.firstOrNull { it.id == id }
 }
