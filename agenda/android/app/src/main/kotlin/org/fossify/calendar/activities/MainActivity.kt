@@ -14,6 +14,7 @@ import android.view.MenuItem
 import android.widget.Toast
 import androidx.core.graphics.drawable.toDrawable
 import androidx.fragment.app.FragmentManager
+import kotlinx.coroutines.runBlocking
 import org.fossify.calendar.R
 import org.fossify.calendar.adapters.EventListAdapter
 import org.fossify.calendar.adapters.QuickFilterCalendarAdapter
@@ -42,6 +43,7 @@ import org.fossify.calendar.fragments.MyFragmentHolder
 import org.fossify.calendar.fragments.WeekFragmentsHolder
 import org.fossify.calendar.fragments.YearFragmentsHolder
 import org.fossify.calendar.helpers.ANNIVERSARY_EVENT
+import org.fossify.calendar.helpers.AgendaSyncEngine
 import org.fossify.calendar.helpers.BIRTHDAY_EVENT
 import org.fossify.calendar.helpers.DAILY_VIEW
 import org.fossify.calendar.helpers.DAY_CODE
@@ -76,6 +78,7 @@ import org.fossify.calendar.helpers.YEAR
 import org.fossify.calendar.helpers.YEARLY_VIEW
 import org.fossify.calendar.helpers.YEAR_TO_OPEN
 import org.fossify.calendar.helpers.getActivityToOpen
+import org.fossify.calendar.helpers.statusMessage
 import org.fossify.calendar.jobs.CalDAVUpdateListener
 import org.fossify.calendar.models.Event
 import org.fossify.calendar.models.ListEvent
@@ -222,7 +225,7 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
         }
 
         binding.swipeRefreshLayout.setOnRefreshListener {
-            refreshCalDAVCalendars(true)
+            refreshFromPull()
         }
 
         checkIsViewIntent()
@@ -333,6 +336,7 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
                 shouldGoToTodayBeVisible && !binding.mainMenu.isSearchOpen
             findItem(R.id.go_to_date).isVisible = config.storedView != EVENTS_LIST_VIEW
             findItem(R.id.refresh_caldav_calendars).isVisible = config.caldavSync
+            findItem(R.id.agenda_sync_now).isVisible = config.agendaSyncConfigured
             findItem(R.id.more_apps_from_us).isVisible =
                 resources.getBoolean(org.fossify.commons.R.bool.is_google_play_build)
         }
@@ -359,6 +363,7 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
                 R.id.print -> printView()
                 R.id.filter -> showFilterDialog()
                 R.id.refresh_caldav_calendars -> refreshCalDAVCalendars(true)
+                R.id.agenda_sync_now -> syncAgendaHub(showSyncingToast = true)
                 R.id.manage_holidays -> manageHolidays()
                 R.id.add_birthdays -> tryAddBirthdays()
                 R.id.add_anniversaries -> tryAddAnniversaries()
@@ -679,6 +684,52 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
         }
         runOnUiThread {
             binding.swipeRefreshLayout.isRefreshing = false
+        }
+    }
+
+    /**
+     * The pull gesture refreshes every source that is configured; with none,
+     * the spinner just stops instead of hanging.
+     */
+    private fun refreshFromPull() {
+        if (config.caldavSync) {
+            refreshCalDAVCalendars(true)
+        }
+        if (config.agendaSyncConfigured) {
+            syncAgendaHub(showSyncingToast = false)
+        } else if (!config.caldavSync) {
+            binding.swipeRefreshLayout.isRefreshing = false
+        }
+    }
+
+    /**
+     * One round against the Atena Hub, off the UI thread. The toolbar action,
+     * the pull gesture and the settings screen all end up here, so the toast
+     * reporting what moved is written once.
+     */
+    private fun syncAgendaHub(showSyncingToast: Boolean) {
+        if (!config.agendaSyncConfigured) {
+            binding.swipeRefreshLayout.isRefreshing = false
+            return
+        }
+
+        if (showSyncingToast) {
+            toast(R.string.agenda_sync_running)
+        }
+
+        ensureBackgroundThread {
+            val result = runBlocking { AgendaSyncEngine.sync(applicationContext) }
+            runOnUiThread {
+                binding.swipeRefreshLayout.isRefreshing = false
+                if (isDestroyed || isFinishing) {
+                    return@runOnUiThread
+                }
+
+                toast(result.statusMessage(this))
+                if (result.ok) {
+                    refreshViewPager()
+                }
+            }
         }
     }
 
@@ -1556,8 +1607,9 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
     }
 
     private fun checkSwipeRefreshAvailability() {
+        val hasSomethingToPull = config.caldavSync || config.agendaSyncConfigured
         binding.swipeRefreshLayout.isEnabled =
-            config.caldavSync && config.pullToRefresh && config.storedView != WEEKLY_VIEW
+            hasSomethingToPull && config.pullToRefresh && config.storedView != WEEKLY_VIEW
         if (!binding.swipeRefreshLayout.isEnabled) {
             binding.swipeRefreshLayout.isRefreshing = false
         }

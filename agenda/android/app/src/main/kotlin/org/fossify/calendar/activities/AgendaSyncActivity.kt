@@ -8,8 +8,8 @@ import org.fossify.calendar.databinding.ActivityAgendaSyncBinding
 import org.fossify.calendar.extensions.config
 import org.fossify.calendar.helpers.AgendaSyncClient
 import org.fossify.calendar.helpers.AgendaSyncEngine
-import org.fossify.calendar.helpers.AgendaSyncErrorKind
 import org.fossify.calendar.helpers.AgendaSyncResult
+import org.fossify.calendar.helpers.statusMessage
 import org.fossify.calendar.jobs.AgendaSyncWorker
 import kotlinx.coroutines.runBlocking
 import org.fossify.commons.dialogs.ConfirmationDialog
@@ -22,8 +22,11 @@ import org.fossify.commons.helpers.ensureBackgroundThread
 
 /**
  * Atena Hub settings: URL, token and device name. Saving validates nothing on
- * the network side except the fields themselves; the first sync reports a
- * wrong token or an unreachable server in the status line.
+ * the network side except the fields themselves; the sync reports a wrong
+ * token or an unreachable server in the status line.
+ *
+ * Once a server is saved the button becomes "Sync now", so updating later does
+ * not require retyping anything.
  */
 class AgendaSyncActivity : SimpleActivity() {
 
@@ -79,6 +82,7 @@ class AgendaSyncActivity : SimpleActivity() {
 
         hideKeyboard()
         AgendaSyncWorker.schedulePeriodic(this)
+        refreshStatus()
         runSync(showResult = true)
     }
 
@@ -98,12 +102,18 @@ class AgendaSyncActivity : SimpleActivity() {
                     return@runOnUiThread
                 }
                 binding.agendaSyncSave.isEnabled = true
+                refreshStatus()
                 renderResult(result, showResult)
             }
         }
     }
 
     private fun refreshStatus() {
+        // With a server already saved the button's job is to update, so it says
+        // so; before that it saves the fields and syncs in one go.
+        binding.agendaSyncSave.setText(
+            if (config.agendaSyncConfigured) R.string.agenda_sync_now else R.string.agenda_sync_save
+        )
         binding.agendaSyncStatus.text = when {
             !config.agendaSyncConfigured -> getString(R.string.agenda_sync_not_configured)
             config.agendaSyncLastAt == 0L -> getString(R.string.agenda_sync_never_synced)
@@ -114,14 +124,8 @@ class AgendaSyncActivity : SimpleActivity() {
     private fun renderResult(result: AgendaSyncResult, showResult: Boolean) {
         binding.agendaSyncStatus.text = when {
             !result.configured -> getString(R.string.agenda_sync_not_configured)
-            result.ok && showResult -> getString(
-                R.string.agenda_sync_result,
-                result.pushed,
-                result.pulled
-            )
-
-            result.ok -> lastSyncText()
-            else -> errorText(result)
+            result.ok && !showResult -> lastSyncText()
+            else -> result.statusMessage(this)
         }
     }
 
@@ -132,18 +136,6 @@ class AgendaSyncActivity : SimpleActivity() {
             DateUtils.MINUTE_IN_MILLIS
         )
         return getString(R.string.agenda_sync_last_sync, relative)
-    }
-
-    private fun errorText(result: AgendaSyncResult): String = when (result.error) {
-        AgendaSyncErrorKind.UNAUTHORIZED -> getString(R.string.agenda_sync_error_unauthorized)
-        AgendaSyncErrorKind.NETWORK -> getString(R.string.agenda_sync_error_network)
-        AgendaSyncErrorKind.INVALID_RESPONSE -> getString(R.string.agenda_sync_error_invalid_response)
-        AgendaSyncErrorKind.SERVER -> getString(
-            R.string.agenda_sync_error_server,
-            result.errorDetail.orEmpty()
-        )
-
-        else -> getString(R.string.agenda_sync_not_configured)
     }
 
     private fun confirmDisconnect() {

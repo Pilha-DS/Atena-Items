@@ -19,6 +19,11 @@
         android:title="@string/filter_events_by_type"
         app:showAsAction="ifRoom" />
     <item
+        android:id="@+id/agenda_sync_now"
+        android:icon="@drawable/ic_repeat_outline_vector"
+        android:title="@string/agenda_sync_now"
+        app:showAsAction="ifRoom" />
+    <item
         android:id="@+id/refresh_caldav_calendars"
         android:icon="@drawable/ic_repeat_outline_vector"
         android:title="@string/refresh_caldav_calendars"
