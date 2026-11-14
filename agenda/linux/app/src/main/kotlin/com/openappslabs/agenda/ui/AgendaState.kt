@@ -21,6 +21,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.openappslabs.agenda.data.model.Event
 import com.openappslabs.agenda.data.model.EventTimes
+import com.openappslabs.agenda.data.notify.NotifyPlan
+import com.openappslabs.agenda.data.notify.NotifyPreferences
 import com.openappslabs.agenda.data.repository.EventRepository
 import com.openappslabs.agenda.data.sync.AgendaSyncEngine
 import com.openappslabs.agenda.data.sync.SyncConfig
@@ -51,6 +53,7 @@ class AgendaState(
     private val repository: EventRepository,
     private val syncEngine: AgendaSyncEngine,
     private val preferences: SyncPreferences,
+    private val notifyPreferences: NotifyPreferences,
     private val windowPreferences: WindowPreferences,
     private val scope: CoroutineScope,
     private val onDataChanged: () -> Unit = {}
@@ -77,6 +80,8 @@ class AgendaState(
     var syncState by mutableStateOf(syncEngine.state.value)
         private set
     var syncConfig by mutableStateOf(preferences.read())
+        private set
+    var notifyConfig by mutableStateOf(notifyPreferences.read())
         private set
     var editor by mutableStateOf<EventFormValues?>(null)
         private set
@@ -229,6 +234,7 @@ class AgendaState(
 
     fun openSyncSettings() {
         syncConfig = preferences.read()
+        notifyConfig = notifyPreferences.read()
         syncOpen = true
     }
 
@@ -324,6 +330,34 @@ class AgendaState(
             )
         }
         syncConfig = updated
+        return null
+    }
+
+    /**
+     * Applies the notification section. The text fields are validated here
+     * instead of in the dialog, so a typo never reaches the file and the
+     * message names the field that is wrong.
+     */
+    fun saveNotifySettings(
+        enabled: Boolean,
+        digestEnabled: Boolean,
+        digestAt: String,
+        remindEnabled: Boolean,
+        leadMinutes: String
+    ): String? {
+        val time = NotifyPlan.parseTime(digestAt) ?: return Strings.errorNotifyTime
+        val lead = leadMinutes.trim().toIntOrNull() ?: return Strings.errorNotifyLead
+        if (lead !in 1..NotifyPlan.MAX_LEAD_MINUTES) return Strings.errorNotifyLead
+
+        notifyConfig = notifyPreferences.update {
+            it.copy(
+                enabled = enabled,
+                digestEnabled = digestEnabled,
+                digestAt = NotifyPlan.formatTime(time),
+                remindEnabled = remindEnabled,
+                leadMinutes = lead
+            )
+        }
         return null
     }
 

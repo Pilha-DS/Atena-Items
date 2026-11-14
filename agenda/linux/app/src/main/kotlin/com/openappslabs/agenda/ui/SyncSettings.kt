@@ -44,9 +44,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.openappslabs.agenda.data.notify.NotifyConfig
 import com.openappslabs.agenda.data.sync.SyncConfig
 import com.openappslabs.agenda.ui.i18n.Strings
 import java.time.Instant
@@ -54,17 +56,21 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 
 /**
- * Hub settings. Connecting is optional: without a server the app is fully
- * usable and everything stays on this machine.
+ * Settings: the window behaviour, the day notifications and the hub.
+ *
+ * Connecting is optional and so are notifications: without a server the app
+ * keeps everything local, and without notifications it stays quiet.
  */
 @Composable
 fun SyncSettingsDialog(
     config: SyncConfig,
+    notify: NotifyConfig,
     closeOnClickOutside: Boolean,
     onToggleCloseOnClickOutside: (Boolean) -> Unit,
     onClose: () -> Unit,
     onSave: (String, String, String) -> String?,
     onRefresh: (String, String, String, (String) -> Unit) -> String?,
+    onSaveNotify: (Boolean, Boolean, String, Boolean, String) -> String?,
     onDisconnect: () -> Unit,
     onTest: (String, String, (String) -> Unit) -> Unit
 ) {
@@ -75,6 +81,16 @@ fun SyncSettingsDialog(
     var message by remember { mutableStateOf<String?>(null) }
     var testing by remember { mutableStateOf(false) }
     var syncing by remember { mutableStateOf(false) }
+
+    var notifyEnabled by remember { mutableStateOf(notify.enabled) }
+    var digestEnabled by remember { mutableStateOf(notify.digestEnabled) }
+    var digestAt by remember { mutableStateOf(notify.digestAt) }
+    var remindEnabled by remember { mutableStateOf(notify.remindEnabled) }
+    var leadMinutes by remember { mutableStateOf(notify.leadMinutes.toString()) }
+
+    fun applyNotify() {
+        error = onSaveNotify(notifyEnabled, digestEnabled, digestAt, remindEnabled, leadMinutes)
+    }
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)),
@@ -112,6 +128,68 @@ fun SyncSettingsDialog(
                             text = Strings.closeOnClickOutsideHint,
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 4.dp),
+                    color = MaterialTheme.colorScheme.outline
+                )
+
+                Text(Strings.notifySection, style = MaterialTheme.typography.labelMedium)
+                Text(
+                    text = Strings.notifyHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                CheckRow(Strings.notifyEnabled, notifyEnabled) { checked ->
+                    notifyEnabled = checked
+                    applyNotify()
+                }
+
+                if (notifyEnabled) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            CheckRow(Strings.notifyDigest, digestEnabled) { checked ->
+                                digestEnabled = checked
+                                applyNotify()
+                            }
+                        }
+                        OutlinedTextField(
+                            value = digestAt,
+                            onValueChange = { digestAt = it },
+                            label = { Text(Strings.notifyDigestAt) },
+                            placeholder = { Text(Strings.notifyDigestHint) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .width(124.dp)
+                                .onFocusChanged { if (!it.isFocused) applyNotify() }
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(Modifier.weight(1f)) {
+                            CheckRow(Strings.notifyRemind, remindEnabled) { checked ->
+                                remindEnabled = checked
+                                applyNotify()
+                            }
+                        }
+                        OutlinedTextField(
+                            value = leadMinutes,
+                            onValueChange = { leadMinutes = it },
+                            label = { Text(Strings.notifyLead) },
+                            singleLine = true,
+                            modifier = Modifier
+                                .width(124.dp)
+                                .onFocusChanged { if (!it.isFocused) applyNotify() }
                         )
                     }
                 }
@@ -207,9 +285,9 @@ fun SyncSettingsDialog(
                     )
                 }
 
-                error?.let { message ->
+                error?.let { text ->
                     Text(
-                        text = message,
+                        text = text,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -239,6 +317,17 @@ fun SyncSettingsDialog(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun CheckRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().clickable { onChange(!checked) },
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(checked = checked, onCheckedChange = onChange)
+        Text(text = label, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

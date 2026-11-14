@@ -88,6 +88,18 @@ object Strings {
     const val errorServerUrl = "Informe a URL do servidor."
     const val errorToken = "Informe o token."
 
+    const val notifySection = "Notificações"
+    const val notifyHint = "Funcionam com a janela fechada, enquanto o Agenda estiver " +
+        "rodando em segundo plano (ele inicia junto com a sessão)."
+    const val notifyEnabled = "Notificar sobre os eventos do dia"
+    const val notifyDigest = "Resumo de manhã"
+    const val notifyDigestAt = "Horário do resumo"
+    const val notifyDigestHint = "hh:mm"
+    const val notifyRemind = "Avisar antes de cada evento"
+    const val notifyLead = "Minutos antes"
+    const val errorNotifyTime = "Horário inválido. Use hh:mm."
+    const val errorNotifyLead = "Informe os minutos antes do evento (1 a 1440)."
+
     /** "13 de novembro" — used as the title of the selected day. */
     const val eventCountOne = "1 evento"
     const val eventCountMany = "%d eventos"

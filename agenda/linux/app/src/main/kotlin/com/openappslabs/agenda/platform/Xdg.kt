@@ -43,7 +43,11 @@ object Xdg {
 
     val databaseFile: Path = dataDir.resolve("agenda.db")
     val configFile: Path = configDir.resolve("config.json")
+    val notifyFile: Path = configDir.resolve("notify.json")
     val windowFile: Path = configDir.resolve("window.json")
+
+    /** Entry that starts the app hidden at login (notifications, warm window). */
+    val autostartFile: Path = configHome.resolve("autostart/agenda.desktop")
 
     /** KDE's palette and accent color, used when present. */
     val kdeGlobalsFile: Path = configHome.resolve("kdeglobals")

@@ -251,6 +251,97 @@
                 android:text="@string/reminders" />
 
             <RelativeLayout
+                android:id="@+id/settings_agenda_notify_holder"
+                style="@style/SettingsHolderSwitchStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyMaterialSwitch
+                    android:id="@+id/settings_agenda_notify"
+                    style="@style/SettingsSwitchStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agenda_notify" />
+
+            </RelativeLayout>
+
+            <RelativeLayout
+                android:id="@+id/settings_agenda_notify_digest_holder"
+                style="@style/SettingsHolderSwitchStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyMaterialSwitch
+                    android:id="@+id/settings_agenda_notify_digest"
+                    style="@style/SettingsSwitchStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agenda_notify_digest" />
+
+            </RelativeLayout>
+
+            <RelativeLayout
+                android:id="@+id/settings_agenda_notify_at_holder"
+                style="@style/SettingsHolderTextViewStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/settings_agenda_notify_at_label"
+                    style="@style/SettingsTextLabelStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agenda_notify_digest_at" />
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/settings_agenda_notify_at"
+                    style="@style/SettingsTextValueStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/settings_agenda_notify_at_label"
+                    tools:text="07:00" />
+
+            </RelativeLayout>
+
+            <RelativeLayout
+                android:id="@+id/settings_agenda_notify_remind_holder"
+                style="@style/SettingsHolderSwitchStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyMaterialSwitch
+                    android:id="@+id/settings_agenda_notify_remind"
+                    style="@style/SettingsSwitchStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agenda_notify_remind" />
+
+            </RelativeLayout>
+
+            <RelativeLayout
+                android:id="@+id/settings_agenda_notify_lead_holder"
+                style="@style/SettingsHolderTextViewStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/settings_agenda_notify_lead_label"
+                    style="@style/SettingsTextLabelStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/agenda_notify_lead" />
+
+                <org.fossify.commons.views.MyTextView
+                    android:id="@+id/settings_agenda_notify_lead"
+                    style="@style/SettingsTextValueStyle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_below="@+id/settings_agenda_notify_lead_label"
+                    tools:text="10" />
+
+            </RelativeLayout>
+
+            <RelativeLayout
                 android:id="@+id/settings_customize_notifications_holder"
                 style="@style/SettingsHolderTextViewOneLinerStyle"
                 android:layout_width="match_parent"

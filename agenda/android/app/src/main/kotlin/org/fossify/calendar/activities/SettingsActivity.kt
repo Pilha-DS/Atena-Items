@@ -26,6 +26,11 @@ import org.fossify.calendar.extensions.scheduleNextAutomaticBackup
 import org.fossify.calendar.extensions.showImportEventsDialog
 import org.fossify.calendar.extensions.tryImportEventsFromFile
 import org.fossify.calendar.extensions.updateWidgets
+import org.fossify.calendar.helpers.AGENDA_NOTIFY_DIGEST
+import org.fossify.calendar.helpers.AGENDA_NOTIFY_DIGEST_AT
+import org.fossify.calendar.helpers.AGENDA_NOTIFY_ENABLED
+import org.fossify.calendar.helpers.AGENDA_NOTIFY_LEAD
+import org.fossify.calendar.helpers.AGENDA_NOTIFY_REMIND
 import org.fossify.calendar.helpers.ALLOW_CHANGING_TIME_ZONES
 import org.fossify.calendar.helpers.ALLOW_CREATING_TASKS
 import org.fossify.calendar.helpers.ALLOW_CUSTOMIZE_DAY_COUNT
@@ -67,6 +72,7 @@ import org.fossify.calendar.helpers.VIBRATE
 import org.fossify.calendar.helpers.WEEKLY_VIEW
 import org.fossify.calendar.helpers.WEEK_NUMBERS
 import org.fossify.calendar.helpers.YEARLY_VIEW
+import org.fossify.calendar.jobs.AgendaNotifyWorker
 import org.fossify.calendar.models.CalendarEntity
 import org.fossify.commons.dialogs.ColorPickerDialog
 import org.fossify.commons.dialogs.ConfirmationDialog
@@ -151,6 +157,9 @@ class SettingsActivity : SimpleActivity() {
         private const val PICK_SETTINGS_IMPORT_SOURCE_INTENT = 2
         private const val PICK_EVENTS_IMPORT_SOURCE_INTENT = 3
         private const val PICK_EVENTS_EXPORT_FILE_INTENT = 4
+
+        /** Offered by the "minutes before" picker; a day-long lead makes no sense. */
+        private val AGENDA_NOTIFY_LEAD_OPTIONS = listOf(5, 10, 15, 30, 60)
     }
 
     private var mStoredPrimaryColor = 0
@@ -207,6 +216,7 @@ class SettingsActivity : SimpleActivity() {
         setupCaldavSync()
         setupManageSyncedCalendars()
         setupAgendaSync()
+        setupAgendaNotifications()
         setupDefaultStartTime()
         setupDefaultDuration()
         setupDefaultCalendar()
@@ -402,6 +412,125 @@ class SettingsActivity : SimpleActivity() {
         settingsAgendaSyncHolder.setOnClickListener {
             startActivity(Intent(this@SettingsActivity, AgendaSyncActivity::class.java))
         }
+    }
+
+    /**
+     * Day notifications: the morning summary and the heads-up before each
+     * event, run by [AgendaNotifyWorker] even with the app closed.
+     */
+    private fun setupAgendaNotifications() = binding.apply {
+        settingsAgendaNotify.isChecked = config.agendaNotifyEnabled
+        settingsAgendaNotifyHolder.setOnClickListener {
+            if (config.agendaNotifyEnabled) {
+                toggleAgendaNotify(false)
+            } else {
+                handleNotificationPermission { granted ->
+                    if (granted) {
+                        toggleAgendaNotify(true)
+                    }
+                }
+            }
+        }
+
+        settingsAgendaNotifyDigest.isChecked = config.agendaNotifyDigest
+        settingsAgendaNotifyDigestHolder.setOnClickListener {
+            settingsAgendaNotifyDigest.toggle()
+            config.agendaNotifyDigest = settingsAgendaNotifyDigest.isChecked
+            toggleAgendaNotifyVisibility()
+            AgendaNotifyWorker.checkSoon(this@SettingsActivity)
+        }
+
+        settingsAgendaNotifyAtHolder.setOnClickListener { showAgendaNotifyTimePicker() }
+
+        settingsAgendaNotifyRemind.isChecked = config.agendaNotifyRemind
+        settingsAgendaNotifyRemindHolder.setOnClickListener {
+            settingsAgendaNotifyRemind.toggle()
+            config.agendaNotifyRemind = settingsAgendaNotifyRemind.isChecked
+            toggleAgendaNotifyVisibility()
+            AgendaNotifyWorker.checkSoon(this@SettingsActivity)
+        }
+
+        settingsAgendaNotifyLeadHolder.setOnClickListener { showAgendaNotifyLeadDialog() }
+
+        updateAgendaNotifyAt()
+        updateAgendaNotifyLead()
+        toggleAgendaNotifyVisibility()
+    }
+
+    private fun toggleAgendaNotify(enabled: Boolean) = binding.apply {
+        settingsAgendaNotify.isChecked = enabled
+        config.agendaNotifyEnabled = enabled
+        if (enabled) {
+            AgendaNotifyWorker.schedulePeriodic(this@SettingsActivity)
+            AgendaNotifyWorker.checkSoon(this@SettingsActivity)
+        } else {
+            AgendaNotifyWorker.cancelPeriodic(this@SettingsActivity)
+        }
+        toggleAgendaNotifyVisibility()
+    }
+
+    private fun toggleAgendaNotifyVisibility() = binding.apply {
+        val on = config.agendaNotifyEnabled
+        settingsAgendaNotifyDigestHolder.beVisibleIf(on)
+        settingsAgendaNotifyAtHolder.beVisibleIf(on && config.agendaNotifyDigest)
+        settingsAgendaNotifyRemindHolder.beVisibleIf(on)
+        settingsAgendaNotifyLeadHolder.beVisibleIf(on && config.agendaNotifyRemind)
+    }
+
+    private fun showAgendaNotifyTimePicker() {
+        val current = config.agendaNotifyDigestAt
+        val listener = TimePickerDialog.OnTimeSetListener { _, hourOfDay, minute ->
+            config.agendaNotifyDigestAt = hourOfDay * 60 + minute
+            updateAgendaNotifyAt()
+            AgendaNotifyWorker.checkSoon(this)
+        }
+
+        if (isDynamicTheme()) {
+            val timeFormat = if (config.use24HourFormat) TimeFormat.CLOCK_24H else TimeFormat.CLOCK_12H
+            val picker = MaterialTimePicker.Builder()
+                .setTimeFormat(timeFormat)
+                .setHour(current / 60)
+                .setMinute(current % 60)
+                .setInputMode(MaterialTimePicker.INPUT_MODE_CLOCK)
+                .build()
+            picker.addOnPositiveButtonClickListener {
+                config.agendaNotifyDigestAt = picker.hour * 60 + picker.minute
+                updateAgendaNotifyAt()
+                AgendaNotifyWorker.checkSoon(this)
+            }
+            picker.show(supportFragmentManager, "")
+        } else {
+            TimePickerDialog(
+                this,
+                getTimePickerDialogTheme(),
+                listener,
+                current / 60,
+                current % 60,
+                config.use24HourFormat
+            ).show()
+        }
+    }
+
+    private fun showAgendaNotifyLeadDialog() {
+        val items = ArrayList(AGENDA_NOTIFY_LEAD_OPTIONS.map { RadioItem(it, getFormattedMinutes(it)) })
+        RadioGroupDialog(
+            activity = this@SettingsActivity,
+            items = items,
+            checkedItemId = config.agendaNotifyLead
+        ) {
+            config.agendaNotifyLead = it as Int
+            updateAgendaNotifyLead()
+        }
+    }
+
+    private fun updateAgendaNotifyAt() {
+        val minutes = config.agendaNotifyDigestAt
+        val dateTime = DateTime.now().withHourOfDay(minutes / 60).withMinuteOfHour(minutes % 60)
+        binding.settingsAgendaNotifyAt.text = Formatter.getTime(this, dateTime)
+    }
+
+    private fun updateAgendaNotifyLead() {
+        binding.settingsAgendaNotifyLead.text = getFormattedMinutes(config.agendaNotifyLead)
     }
 
     private fun toggleCaldavSync(enable: Boolean) = binding.apply {
@@ -1165,6 +1294,11 @@ class SettingsActivity : SimpleActivity() {
                 put(HIGHLIGHT_WEEKENDS, config.highlightWeekends)
                 put(HIGHLIGHT_WEEKENDS_COLOR, config.highlightWeekendsColor)
                 put(ALLOW_CREATING_TASKS, config.allowCreatingTasks)
+                put(AGENDA_NOTIFY_ENABLED, config.agendaNotifyEnabled)
+                put(AGENDA_NOTIFY_DIGEST, config.agendaNotifyDigest)
+                put(AGENDA_NOTIFY_DIGEST_AT, config.agendaNotifyDigestAt)
+                put(AGENDA_NOTIFY_REMIND, config.agendaNotifyRemind)
+                put(AGENDA_NOTIFY_LEAD, config.agendaNotifyLead)
             }
 
             exportSettings(configItems)
@@ -1281,6 +1415,11 @@ class SettingsActivity : SimpleActivity() {
                 HIGHLIGHT_WEEKENDS -> config.highlightWeekends = value.toBoolean()
                 HIGHLIGHT_WEEKENDS_COLOR -> config.highlightWeekendsColor = value.toInt()
                 ALLOW_CREATING_TASKS -> config.allowCreatingTasks = value.toBoolean()
+                AGENDA_NOTIFY_ENABLED -> config.agendaNotifyEnabled = value.toBoolean()
+                AGENDA_NOTIFY_DIGEST -> config.agendaNotifyDigest = value.toBoolean()
+                AGENDA_NOTIFY_DIGEST_AT -> config.agendaNotifyDigestAt = value.toInt()
+                AGENDA_NOTIFY_REMIND -> config.agendaNotifyRemind = value.toBoolean()
+                AGENDA_NOTIFY_LEAD -> config.agendaNotifyLead = value.toInt()
             }
         }
 

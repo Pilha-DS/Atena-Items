@@ -79,11 +79,13 @@ fun AgendaApp(state: AgendaState, kdeGlobals: Path) {
             if (state.syncOpen) {
                 SyncSettingsDialog(
                     config = state.syncConfig,
+                    notify = state.notifyConfig,
                     closeOnClickOutside = state.closeOnClickOutside,
                     onToggleCloseOnClickOutside = state::updateCloseOnClickOutside,
                     onClose = state::closeSyncSettings,
                     onSave = state::saveSyncSettings,
                     onRefresh = state::refreshFromSettings,
+                    onSaveNotify = state::saveNotifySettings,
                     onDisconnect = state::disconnect,
                     onTest = state::testConnection
                 )

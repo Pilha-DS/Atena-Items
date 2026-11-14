@@ -5,6 +5,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import org.fossify.calendar.extensions.notifyRunningEvents
+import org.fossify.calendar.jobs.AgendaNotifyWorker
+import org.fossify.calendar.jobs.AgendaSyncWorker
 import org.fossify.calendar.jobs.AppStartupWorker
 import org.fossify.commons.helpers.ensureBackgroundThread
 
@@ -18,6 +20,10 @@ class RescheduleEventsReceiver : BroadcastReceiver() {
             replaceExistingWork = action == Intent.ACTION_TIME_CHANGED
                     || action == Intent.ACTION_TIMEZONE_CHANGED
         )
+        // "Start with the device": reapplying both schedules here means a reboot
+        // or an app update never leaves the agenda without its notifications.
+        AgendaNotifyWorker.schedulePeriodic(context)
+        AgendaSyncWorker.schedulePeriodic(context)
 
         val shouldNotifyRunningEvents = action != Intent.ACTION_TIME_CHANGED
                 && action != Intent.ACTION_TIMEZONE_CHANGED

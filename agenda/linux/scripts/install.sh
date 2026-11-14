@@ -25,6 +25,8 @@ ICON_DIR="$DATA_HOME/icons/hicolor/256x256/apps"
 PLASMOID_DIR="$DATA_HOME/plasma/plasmoids/$PLASMOID_ID"
 BIN_DIR="$HOME/.local/bin"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/agenda"
+AUTOSTART_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
+AUTOSTART_FILE="$AUTOSTART_DIR/$APP_ID.desktop"
 
 # Everything here belongs to the user: under sudo, HOME becomes /root and the
 # plasmoid is installed where the running Plasma shell never looks.
@@ -42,6 +44,7 @@ uninstall() {
     fi
     rm -rf "$OPT_DIR" "$PLASMOID_DIR"
     rm -f "$BIN_DIR/agenda-toggle" "$DESKTOP_DIR/agenda.desktop" "$ICON_DIR/agenda.png"
+    rm -f "$AUTOSTART_FILE"
 
     if command -v update-desktop-database >/dev/null 2>&1; then
         update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
@@ -104,8 +107,28 @@ EOF
     fi
 }
 
-lint_plasmoid() {
-    local lint="/usr/lib/qt6/bin/qmllint"
+# Starts the app hidden when the session begins. The window is never shown, but
+# the process is warm and the notification thread is alive, so the morning
+# digest and the reminders do not depend on the widget being on a panel.
+install_autostart() {
+    echo "==> Registering login autostart"
+    mkdir -p "$AUTOSTART_DIR"
+    cat > "$AUTOSTART_FILE" <<EOF
+[Desktop Entry]
+Type=Application
+Name=Agenda
+Comment=Calendário em segundo plano: notificações dos eventos do dia
+Exec=$BIN_DIR/agenda-toggle prewarm
+Icon=$APP_ID
+Terminal=false
+NoDisplay=true
+Hidden=false
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-phase=2
+EOF
+}
+
+lint_plasmoid() {    local lint="/usr/lib/qt6/bin/qmllint"
     if [[ ! -x "$lint" ]]; then
         lint="$(command -v qmllint || true)"
     fi
@@ -175,6 +198,7 @@ install_app
 install_icon
 install_launcher
 install_plasmoid
+install_autostart
 restart_app
 
 # Leftovers from previous layouts: the IPC directory used to be the runtime
@@ -201,5 +225,7 @@ Day to day:
   panel card    shows the time/date and opens the Agenda window
   launcher      same, via $BIN_DIR/agenda-toggle
   sync          Settings -> Sincronização inside the app
+  notify        Settings -> Notificações inside the app (resumo e lembretes)
+  autostart     $AUTOSTART_FILE (starts hidden at login)
 
 EOF

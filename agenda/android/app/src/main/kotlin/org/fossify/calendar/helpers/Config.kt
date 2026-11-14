@@ -192,6 +192,42 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getLong(AGENDA_SYNC_LAST_AT, 0L)
         set(syncedAt) = prefs.edit().putLong(AGENDA_SYNC_LAST_AT, syncedAt).apply()
 
+    /**
+     * Day notifications: the morning summary and the heads-up before each
+     * event. On by default — they are the reason the app runs in the
+     * background — and they work with or without the hub.
+     */
+    var agendaNotifyEnabled: Boolean
+        get() = prefs.getBoolean(AGENDA_NOTIFY_ENABLED, true)
+        set(enabled) = prefs.edit().putBoolean(AGENDA_NOTIFY_ENABLED, enabled).apply()
+
+    var agendaNotifyDigest: Boolean
+        get() = prefs.getBoolean(AGENDA_NOTIFY_DIGEST, true)
+        set(enabled) = prefs.edit().putBoolean(AGENDA_NOTIFY_DIGEST, enabled).apply()
+
+    /** Minutes since midnight, e.g. 420 for 07:00. */
+    var agendaNotifyDigestAt: Int
+        get() = prefs.getInt(AGENDA_NOTIFY_DIGEST_AT, AGENDA_NOTIFY_DEFAULT_DIGEST_AT)
+        set(minutes) = prefs.edit().putInt(AGENDA_NOTIFY_DIGEST_AT, minutes).apply()
+
+    var agendaNotifyRemind: Boolean
+        get() = prefs.getBoolean(AGENDA_NOTIFY_REMIND, true)
+        set(enabled) = prefs.edit().putBoolean(AGENDA_NOTIFY_REMIND, enabled).apply()
+
+    var agendaNotifyLead: Int
+        get() = prefs.getInt(AGENDA_NOTIFY_LEAD, AGENDA_NOTIFY_DEFAULT_LEAD)
+        set(minutes) = prefs.edit().putInt(AGENDA_NOTIFY_LEAD, minutes.coerceIn(1, DAY_MINUTES)).apply()
+
+    /** Day code (yyyyMMdd) of the last digest, so it shows up once a day. */
+    var agendaNotifyDigestDay: String
+        get() = prefs.getString(AGENDA_NOTIFY_DIGEST_DAY, "")!!
+        set(dayCode) = prefs.edit().putString(AGENDA_NOTIFY_DIGEST_DAY, dayCode).apply()
+
+    /** "uuid@startTS" already announced, kept small by the worker. */
+    var agendaNotifySent: Set<String>
+        get() = prefs.getStringSet(AGENDA_NOTIFY_SENT, emptySet()) ?: emptySet()
+        set(keys) = prefs.edit().putStringSet(AGENDA_NOTIFY_SENT, keys).apply()
+
     val agendaSyncConfigured: Boolean
         get() = agendaSyncUrl.isNotEmpty() && agendaSyncToken.isNotEmpty()
 

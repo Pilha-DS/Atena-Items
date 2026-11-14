@@ -251,6 +251,17 @@
     <string name="agenda_sync_error_invalid_response">The server response could not be read.</string>
     <string name="agenda_sync_disconnect_confirmation">Disconnect from the Atena Hub? The events already on this device are kept.</string>
 
+    <string name="agenda_notify_channel">Agenda notifications</string>
+    <string name="agenda_notify_digest_title">Today\'s agenda</string>
+    <string name="agenda_notify_soon_title">In %1$d min: %2$s</string>
+    <string name="agenda_notify">Day notifications</string>
+    <string name="agenda_notify_summary">Morning summary and a heads-up before each event</string>
+    <string name="agenda_notify_digest">Morning summary</string>
+    <string name="agenda_notify_digest_at">Summary time</string>
+    <string name="agenda_notify_remind">Remind me before each event</string>
+    <string name="agenda_notify_lead">Minutes before</string>
+    <string name="agenda_notify_lead_hint">10</string>
+
     <!-- CalDAV sync -->
     <string name="caldav">CalDAV</string>
     <string name="select_caldav_calendars">Select calendars to sync</string>

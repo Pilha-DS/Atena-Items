@@ -34,11 +34,13 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.WindowPosition
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.openappslabs.agenda.data.notify.NotifyPreferences
 import com.openappslabs.agenda.data.repository.EventRepository
 import com.openappslabs.agenda.data.source.AgendaDatabase
 import com.openappslabs.agenda.data.sync.AgendaSyncEngine
 import com.openappslabs.agenda.data.sync.SyncPreferences
 import com.openappslabs.agenda.platform.IpcBridge
+import com.openappslabs.agenda.platform.NotificationService
 import com.openappslabs.agenda.platform.Startup
 import com.openappslabs.agenda.platform.StatusPublisher
 import com.openappslabs.agenda.platform.WindowPlacement
@@ -53,6 +55,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import java.awt.GraphicsEnvironment
 import javax.swing.SwingUtilities
 import java.awt.event.WindowEvent
@@ -138,6 +141,7 @@ fun main(args: Array<String>) {
     val database = AgendaDatabase(Xdg.databaseFile)
     val repository = EventRepository(database)
     val preferences = SyncPreferences(Xdg.configFile)
+    val notifyPreferences = NotifyPreferences(Xdg.notifyFile)
     val windowPreferences = WindowPreferences(Xdg.windowFile)
 
     // SQLite loads its native driver on the first connection. Doing that off
@@ -166,6 +170,7 @@ fun main(args: Array<String>) {
                 repository = repository,
                 syncEngine = syncEngine,
                 preferences = preferences,
+                notifyPreferences = notifyPreferences,
                 windowPreferences = windowPreferences,
                 scope = scope,
                 onDataChanged = { statusPublisher.publish() }
@@ -290,6 +295,20 @@ fun main(args: Array<String>) {
         }
 
         LaunchedEffect(Unit) { syncEngine.start() }
+
+        // Day notifications. They outlive the window on purpose: the process is
+        // the one the panel prewarms at login, and it keeps running after the
+        // popup closes. The engine is the same instance, so the morning digest
+        // can pull what the phone created before quoting the day.
+        DisposableEffect(Unit) {
+            val notifications = NotificationService(
+                repository = repository,
+                preferences = notifyPreferences,
+                sync = { runBlocking { syncEngine.syncNow() } }
+            )
+            notifications.start()
+            onDispose { notifications.stop() }
+        }
 
         // Auto-hide when the user goes elsewhere.
         //

@@ -87,6 +87,27 @@ O ícone do painel chama `prewarm` quando o Plasma carrega: o processo já está
 quente e o primeiro clique só mostra a janela (~50 ms), em vez de pagar o start
 do JVM/Compose (~2 s). O instalador faz o mesmo ao terminar.
 
+## IA pelo Vicinae
+
+O **Conversar com IA** do [Vicinae](../../search/README.md) tem ferramentas de
+agenda que editam o banco do app: listar e ler eventos, criar, editar e apagar.
+A janela recarrega ao abrir, então o evento criado na conversa aparece assim que
+ela é aberta, e a sincronização leva o evento para os outros dispositivos.
+
+| Ferramenta | O que faz | Aprovação |
+| --- | --- | --- |
+| `agenda_search` | lista os eventos de um intervalo (com busca por texto) | automática |
+| `agenda_read` | lê um evento pelo id | automática |
+| `agenda_create` | cria um evento | pedida no chat |
+| `agenda_update` | muda título, descrição, local, data ou o dia inteiro | pedida no chat |
+| `agenda_delete` | apaga o evento (a exclusão também vai para o hub) | pedida no chat |
+
+O caminho do banco fica em **Vicinae → Ajustes → IA → Agenda** e por padrão é
+`~/.local/share/agenda/agenda.db`. As datas que o modelo manda são ISO-8601 no
+horário local (`2026-11-14`, `2026-11-14T09:30`); uma data sem hora cria um
+evento de dia inteiro, e num evento de vários dias o `end` é o último dia,
+inclusive.
+
 ## Configuração
 
 | Nome | Padrão | Para que serve |
@@ -96,7 +117,7 @@ do JVM/Compose (~2 s). O instalador faz o mesmo ao terminar.
 | `AGENDA_START_HIDDEN` | — | Quando definida (`=1`, ou `--hidden`), sobe sem janela: processo quente para o primeiro clique ser imediato |
 | `AGENDA_TIMING` | — | Quando definida (`=1`), imprime os marcos do start (ms desde o início da JVM) no stderr |
 | `XDG_DATA_HOME` | `~/.local/share` | Onde fica `agenda/agenda.db` (SQLite, WAL) |
-| `XDG_CONFIG_HOME` | `~/.config` | Onde ficam `agenda/config.json`, `agenda/window.json` e o `ipc-dir` publicado pelo app |
+| `XDG_CONFIG_HOME` | `~/.config` | Onde ficam `agenda/config.json`, `agenda/notify.json`, `agenda/window.json` e o `ipc-dir` publicado pelo app |
 | `XDG_CACHE_HOME` | `~/.cache` | Diretório de runtime alternativo quando não há `XDG_RUNTIME_DIR` |
 | `XDG_RUNTIME_DIR` | — | Arquivos de IPC (`agenda.toggle`, `agenda.sync`, `agenda.status.json`, `agenda.anchor`) |
 
@@ -120,6 +141,19 @@ O app é **local-first**: sem servidor configurado, tudo funciona e fica no SQLi
 
 O formato dos DTOs e as regras de conflito estão em [`server/README.md`](../../server/README.md).
 
+## Notificações
+
+Com o app rodando — inclusive escondido, como o widget e o autostart o deixam —, uma thread do próprio processo (`NotificationService`) olha o dia a cada 30 s e avisa:
+
+- **Resumo de manhã**, no horário configurado (padrão `07:00`), com a lista dos eventos do dia;
+- **Antes de cada evento**, `N` minutos antes (padrão `10`), com horário, local e a primeira linha da descrição.
+
+Os dois são configurados em **Ajustes → Notificações**. Antes do resumo, o app sincroniza quando o hub está configurado, então um evento criado no celular entra no resumo do desktop.
+
+O envio usa `notify-send` e, se ele não existir, `gdbus` direto no `org.freedesktop.Notifications` — nenhum dos dois é dependência obrigatória: sem eles o app continua funcionando, só não notifica. O que já foi mostrado fica em `~/.config/agenda/notify.json` (`lastDigestDay` e `sent`), o que evita repetir o resumo do dia ou o aviso de um evento.
+
+O `install.sh` também registra `~/.config/autostart/agenda.desktop`, que executa `agenda-toggle prewarm` no login: o app sobe **sem janela**, só para o processo (e as notificações) já estarem de pé. Remova esse arquivo para não iniciar junto com a sessão.
+
 ## Estrutura
 
 ```
@@ -142,6 +176,7 @@ linux/
 - **Primeiro clique não abre**: era a corrida com o boot. O widget pré-aquece o app no carregamento do Plasma; se o clique chegasse durante esses ~2 s, o processo existia mas ainda não escutava, e o pedido era descartado. O app agora lê o timestamp do `agenda.toggle` antes de subir e abre quando a janela fica pronta. Sair pelo `X` também libera o lock na hora (o teardown do Skiko pode travar e o processo antigo engoliria o clique seguinte).
 - **Demora para abrir no primeiro clique**: o start do JVM/Compose leva ~2 s, então o app é mantido quente escondido. Rode `agenda-toggle prewarm` (o widget faz isso quando o Plasma carrega) e confira com `pgrep -a agenda` se o processo já está de pé. Para medir o start, `AGENDA_TIMING=1 ~/.local/opt/agenda/bin/agenda` imprime cada etapa em ms no stderr.
 - **Sincronização falha com token recusado**: regerar o token no hub e salvar de novo em **Ajustes → Sincronização**.
+- **Nenhuma notificação aparece**: confira `command -v notify-send` e se o servidor responde com `gdbus call --session --dest org.freedesktop.Notifications --object-path /org/freedesktop/Notifications --method org.freedesktop.Notifications.GetServerInformation`. Sem notificação, o próximo ciclo tenta de novo (nada é marcado como enviado). Lembre também de desligar o modo Não Perturbe do Plasma.
 
 ## Licença
 

@@ -27,6 +27,20 @@ A sincronização é opcional e configurada dentro do app, em **Ajustes → Sinc
 - No desktop o rodapé tem **Sincronizar**, a janela de ajustes tem **Sincronizar agora** e o `↻` no cabeçalho do calendário faz o mesmo; o widget do Plasma tem o botão de refresh na própria lista.
 - Ficam de fora os eventos recorrentes, as ocorrências filhas, as tarefas e os eventos de calendários CalDAV ou importados de ICS: esses já têm o próprio mecanismo de sync, e o hub não representa recorrência.
 
+## Notificações
+
+O app roda em segundo plano para avisar sobre o dia, nas duas plataformas. São dois avisos:
+
+- **Resumo de manhã**: a lista dos eventos do dia, no horário escolhido (padrão 07:00).
+- **Antes de cada evento**: um aviso com N minutos de antecedência (padrão 10), com horário e local.
+
+Onde configurar: **Ajustes → Lembretes** no Android (chave "Notificações do dia") e **Ajustes → Notificações** no desktop. Dá para desligar cada aviso separadamente.
+
+- **Android**: um `WorkManager` periódico (`AgendaNotifyWorker`, 15 em 15 minutos) faz o trabalho mesmo com o app fechado. Ele **sincroniza antes** de montar o resumo quando o hub está configurado, então um evento criado no desktop também notifica no celular. O agendamento é reaplicado no boot (`BOOT_COMPLETED`), então **liga junto com o aparelho**. No Android 13+ é preciso conceder a permissão de notificações — a tela de Ajustes pede na hora de ligar a chave.
+- **Linux**: uma thread própria dentro do processo quente do app (`NotificationService`) verifica o dia a cada 30 s e fala com o servidor de notificações via `notify-send` (com `gdbus` como reserva). O `install.sh` registra `~/.config/autostart/agenda.desktop`, que sobe o app **escondido no login**, para as notificações não dependerem do widget no painel.
+
+O que já foi avisado fica gravado (`lastDigestDay`/`sent` no `notify.json` do desktop e preferências no Android), então reiniciar o app não repete a notificação do dia nem a de um evento.
+
 ## Licença
 
 GPL-3.0-or-later, a mesma do Fossify Calendar. Veja [`android/LICENSE`](android/LICENSE) e os créditos no [README principal](../README.md).

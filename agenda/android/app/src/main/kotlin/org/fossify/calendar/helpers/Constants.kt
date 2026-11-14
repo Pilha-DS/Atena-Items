@@ -117,6 +117,22 @@ const val AGENDA_SYNC_PING_PATH = "/api/v1/ping"
 const val AGENDA_SYNC_WORK = "agenda_sync_work"
 const val AGENDA_SYNC_PERIODIC_WORK = "agenda_sync_periodic_work"
 const val AGENDA_SYNC_INTERVAL_MINUTES = 30L
+
+// Day notifications (digest in the morning + a heads-up before each event)
+const val AGENDA_NOTIFY_ENABLED = "agenda_notify_enabled"
+const val AGENDA_NOTIFY_DIGEST = "agenda_notify_digest"
+const val AGENDA_NOTIFY_DIGEST_AT = "agenda_notify_digest_at"
+const val AGENDA_NOTIFY_REMIND = "agenda_notify_remind"
+const val AGENDA_NOTIFY_LEAD = "agenda_notify_lead"
+const val AGENDA_NOTIFY_DIGEST_DAY = "agenda_notify_digest_day"
+const val AGENDA_NOTIFY_SENT = "agenda_notify_sent"
+const val AGENDA_NOTIFY_WORK = "agenda_notify_periodic_work"
+const val AGENDA_NOTIFY_CHECK_WORK = "agenda_notify_check_work"
+const val AGENDA_NOTIFY_INTERVAL_MINUTES = 15L
+const val AGENDA_NOTIFY_CHANNEL_ID = "agenda_notifications"
+const val AGENDA_NOTIFY_DIGEST_ID = 40_001
+const val AGENDA_NOTIFY_DEFAULT_DIGEST_AT = 7 * 60
+const val AGENDA_NOTIFY_DEFAULT_LEAD = 10
 const val LIST_WIDGET_VIEW_TO_OPEN = "list_widget_view_to_open"
 const val CALDAV_SYNC = "caldav_sync"
 const val CALDAV_SYNCED_CALENDAR_IDS = "caldav_synced_calendar_ids"
