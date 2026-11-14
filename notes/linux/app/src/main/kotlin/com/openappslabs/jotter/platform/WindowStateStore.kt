@@ -97,37 +97,73 @@ object WindowStateStore {
         store(props)
     }
 
+    /**
+     * Whether the clipboard window was open last time. Off by default: the
+     * widget and the general note are the everyday pair, the clipboard editor
+     * is opened on demand from the search bar or the tray.
+     */
+    fun loadClipboardVisible(): Boolean =
+        load().getProperty("clipboardVisible")?.let { it != "0" } ?: false
+
+    fun saveClipboardVisible(visible: Boolean) {
+        val props = load()
+        props.setProperty("clipboardVisible", if (visible) "1" else "0")
+        store(props)
+    }
+
     /** Width of the companion window, a bit narrower than the notes card. */
     const val SCRATCHPAD_WIDTH_DP = 340f
-    private const val SCRATCHPAD_GAP = 10
 
-    /** Where the companion window should go, and how far the widget must move. */
-    data class GluePlacement(val scratchpad: Point, val mainShiftX: Int)
+    /** Width of the clipboard companion: same footprint as the general note. */
+    const val CLIPBOARD_WIDTH_DP = 340f
+    private const val COMPANION_GAP = 10
 
     /**
-     * Keeps the "general note" window glued to the right side of the widget.
-     *
-     * If the pair does not fit (the widget sits next to the panel on the
-     * right edge, which is the default), the widget slides left just enough
-     * for the scratchpad to stay on screen — the scratchpad is always the
-     * right-hand window. `mainShiftX` tells the caller how far to move it.
+     * Where the three windows of the desktop shell go. A null companion means
+     * that window is hidden and only the others were placed.
      */
-    fun glueRight(main: java.awt.Rectangle, width: Int, height: Int): GluePlacement {
+    data class ClusterPlacement(
+        val clipboard: Point?,
+        val main: Point,
+        val scratchpad: Point?
+    )
+
+    /**
+     * Lays the companions out in a row around the widget: the clipboard on the
+     * left, the general note on the right.
+     *
+     * The row is kept on screen by sliding the widget, never the companions, so
+     * the widget is the one that moves when the cluster hits a screen edge. A
+     * width of 0 means that companion is hidden. The result only depends on
+     * `main`, so both companion windows can apply it and converge: once the
+     * widget has been moved, recomputing yields the same layout.
+     */
+    fun glueCluster(
+        main: java.awt.Rectangle,
+        clipboardWidth: Int,
+        scratchpadWidth: Int,
+        height: Int
+    ): ClusterPlacement {
         val bounds = usableBounds()
         val y = main.y.coerceIn(bounds.y, (bounds.y + bounds.height - height).coerceAtLeast(bounds.y))
-        val desiredX = main.x + main.width + SCRATCHPAD_GAP
-        val maxX = bounds.x + bounds.width - width
 
-        if (desiredX <= maxX) {
-            return GluePlacement(Point(desiredX, y), mainShiftX = 0)
-        }
+        val hasClipboard = clipboardWidth > 0
+        val hasScratchpad = scratchpadWidth > 0
+        val left = if (hasClipboard) clipboardWidth + COMPANION_GAP else 0
+        val right = if (hasScratchpad) COMPANION_GAP + scratchpadWidth else 0
+        val total = left + main.width + right
 
-        // Slide the widget left so the two windows fit side by side.
-        val overflow = desiredX - maxX
-        val room = (main.x - bounds.x).coerceAtLeast(0)
-        val shift = -overflow.coerceAtMost(room)
-        val x = (desiredX + shift).coerceIn(bounds.x, maxX.coerceAtLeast(bounds.x))
-        return GluePlacement(Point(x, y), mainShiftX = shift)
+        // Keep the widget where it is when the whole row fits, otherwise pull
+        // the row back inside the screen (leftmost position when it never fits).
+        val maxStart = (bounds.x + bounds.width - total).coerceAtLeast(bounds.x)
+        val start = (main.x - left).coerceIn(bounds.x, maxStart)
+        val mainX = start + left
+
+        return ClusterPlacement(
+            clipboard = if (hasClipboard) Point(start, y) else null,
+            main = Point(mainX, y),
+            scratchpad = if (hasScratchpad) Point(mainX + main.width + COMPANION_GAP, y) else null
+        )
     }
 
     /** Anchor used on first launch: bottom-right corner, like a widget. */

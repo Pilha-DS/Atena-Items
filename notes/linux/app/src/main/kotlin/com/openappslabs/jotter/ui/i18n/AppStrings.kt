@@ -363,6 +363,11 @@ interface AppStrings {
     val generalNote: String
     val generalNoteTitle: String
     val closeGeneralNote: String
+    val clipboard: String
+    val clipboardTitle: String
+    val clipboardEmpty: String
+    val closeClipboard: String
+    val reloadClipboard: String
     val showWidget: String
     val hideWidget: String
     val alwaysOnTop: String
@@ -690,6 +695,11 @@ object EnglishStrings : BaseStrings() {
     override val generalNote = "General note"
     override val generalNoteTitle = "Jotter · General note"
     override val closeGeneralNote = "Close general note"
+    override val clipboard = "Clipboard"
+    override val clipboardTitle = "Jotter · Clipboard"
+    override val clipboardEmpty = "The clipboard is empty — type to put something in it"
+    override val closeClipboard = "Close clipboard"
+    override val reloadClipboard = "Reload from clipboard"
     override val showWidget = "Show widget"
     override val hideWidget = "Hide widget"
     override val alwaysOnTop = "Always on top"
@@ -1017,6 +1027,11 @@ object PortugueseStrings : BaseStrings() {
     override val generalNote = "Nota geral"
     override val generalNoteTitle = "Jotter · Nota geral"
     override val closeGeneralNote = "Fechar nota geral"
+    override val clipboard = "Área de transferência"
+    override val clipboardTitle = "Jotter · Área de transferência"
+    override val clipboardEmpty = "A área de transferência está vazia — digite para colocá-la aí"
+    override val closeClipboard = "Fechar área de transferência"
+    override val reloadClipboard = "Recarregar da área de transferência"
     override val showWidget = "Mostrar widget"
     override val hideWidget = "Ocultar widget"
     override val alwaysOnTop = "Sempre no topo"

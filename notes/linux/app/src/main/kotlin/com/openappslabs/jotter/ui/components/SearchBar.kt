@@ -38,6 +38,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.Refresh
@@ -84,7 +85,10 @@ fun SearchBar(
     isSyncing: Boolean = false,
     /** Desktop only: shows the toggle of the companion "general note" window. */
     isScratchpadVisible: Boolean = false,
-    onScratchpadClick: (() -> Unit)? = null
+    onScratchpadClick: (() -> Unit)? = null,
+    /** Desktop only: shows the toggle of the clipboard editor window. */
+    isClipboardVisible: Boolean = false,
+    onClipboardClick: (() -> Unit)? = null
 ) {
     val haptics = rememberJotterHaptics()
     val focusManager = LocalFocusManager.current
@@ -204,6 +208,24 @@ fun SearchBar(
                     keyboardActions = keyboardActions,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            if (onClipboardClick != null) {
+                IconButton(onClick = {
+                    haptics.click()
+                    onClipboardClick()
+                }) {
+                    Icon(
+                        imageVector = Icons.Rounded.ContentPaste,
+                        contentDescription = if (isClipboardVisible) {
+                            strings.closeClipboard
+                        } else {
+                            strings.clipboard
+                        },
+                        tint = if (isClipboardVisible) primaryColor else onSurfaceVariantColor,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
 
             if (onScratchpadClick != null) {

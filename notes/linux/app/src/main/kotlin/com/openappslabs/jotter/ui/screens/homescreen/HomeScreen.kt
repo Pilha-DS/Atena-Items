@@ -64,6 +64,7 @@ import com.openappslabs.jotter.di.AppGraph
 import com.openappslabs.jotter.data.model.Note
 import com.openappslabs.jotter.data.model.NoteFormat
 import com.openappslabs.jotter.platform.AppLock
+import com.openappslabs.jotter.platform.ClipboardWindow
 import com.openappslabs.jotter.platform.ScratchpadWindow
 import com.openappslabs.jotter.platform.Toaster
 import com.openappslabs.jotter.ui.screens.syncscreen.syncErrorMessage
@@ -177,6 +178,11 @@ fun HomeScreen(
                 onScratchpadClick = {
                     haptics.tick()
                     ScratchpadWindow.toggle()
+                },
+                isClipboardVisible = ClipboardWindow.isVisible,
+                onClipboardClick = {
+                    haptics.tick()
+                    ClipboardWindow.toggle()
                 },
                 modifier = Modifier.padding(start = 16.dp, top = 0.dp, end = 16.dp, bottom = 8.dp)
             )

@@ -71,6 +71,7 @@ import com.openappslabs.jotter.navigation.AppNavHost
 import com.openappslabs.jotter.platform.AppLock
 import com.openappslabs.jotter.platform.AutoSave
 import com.openappslabs.jotter.platform.BackDispatcher
+import com.openappslabs.jotter.platform.ClipboardWindow
 import com.openappslabs.jotter.platform.Diagnostics
 import com.openappslabs.jotter.platform.ExternalLinks
 import com.openappslabs.jotter.platform.IpcBridge
@@ -83,6 +84,7 @@ import com.openappslabs.jotter.platform.Toaster
 import com.openappslabs.jotter.platform.WindowStateStore
 import com.openappslabs.jotter.platform.Xdg
 import com.openappslabs.jotter.ui.PinDialog
+import com.openappslabs.jotter.ui.screens.clipboardscreen.ClipboardScreen
 import com.openappslabs.jotter.ui.screens.scratchpadscreen.ScratchpadScreen
 import com.openappslabs.jotter.ui.i18n.LocalStrings
 import com.openappslabs.jotter.ui.i18n.stringsFor
@@ -153,9 +155,12 @@ fun main() {
 
         var isVisible by remember { mutableStateOf(true) }
         var alwaysOnTop by remember { mutableStateOf(true) }
-        // Handles of the notes window and of its companion "general note".
+        // Handles of the notes window and of its two companions: the clipboard
+        // editor on the left and the "general note" on the right.
         var mainWindowHandle by remember { mutableStateOf<java.awt.Window?>(null) }
         var mainBounds by remember { mutableStateOf<java.awt.Rectangle?>(null) }
+        var clipboardWindowHandle by remember { mutableStateOf<java.awt.Window?>(null) }
+        var scratchpadWindowHandle by remember { mutableStateOf<java.awt.Window?>(null) }
         // Set when the panel icon asks for the window, so it opens right next
         // to (or below) that icon instead of at the saved position.
         var pendingAnchor by remember { mutableStateOf<IpcBridge.Anchor?>(null) }
@@ -168,6 +173,7 @@ fun main() {
             stringsFor(preferences.appLanguage)
         }
         val scratchpadTitle = appStrings.generalNoteTitle
+        val clipboardTitle = appStrings.clipboardTitle
         val kdePalette = rememberKdePalette()
 
         val isDark = when (preferences.appTheme) {
@@ -455,6 +461,99 @@ fun main() {
         }
 
         // ------------------------------------------------------------------
+        // Clipboard: a third, title-less window glued to the left of the widget.
+        // It edits the system clipboard itself, not a note.
+        // ------------------------------------------------------------------
+        if (ClipboardWindow.isVisible) {
+            val clipboardState = rememberWindowState(
+                size = DpSize(
+                    WindowStateStore.CLIPBOARD_WIDTH_DP.dp,
+                    initialHeight.dp
+                ),
+                position = WindowPosition.PlatformDefault
+            )
+            val clipboardAllowed =
+                !preferences.isAppLockEnabled || !PinStore.hasPin() || AppLock.isUnlocked
+
+            Window(
+                onCloseRequest = { ClipboardWindow.hide() },
+                visible = isVisible && clipboardAllowed,
+                state = clipboardState,
+                title = clipboardTitle,
+                icon = painterResource("icons/jotter.png"),
+                undecorated = true,
+                transparent = true,
+                resizable = false,
+                alwaysOnTop = true
+            ) {
+                LaunchedEffect(alwaysOnTop) { window.isAlwaysOnTop = alwaysOnTop }
+                SideEffect { clipboardWindowHandle = window }
+
+                var positioned by remember { mutableStateOf(false) }
+                LaunchedEffect(
+                    isVisible,
+                    clipboardAllowed,
+                    mainBounds,
+                    scratchpadWindowHandle,
+                    ScratchpadWindow.isVisible
+                ) {
+                    if (!isVisible || !clipboardAllowed) return@LaunchedEffect
+                    val main = mainWindowHandle ?: return@LaunchedEffect
+                    if (!positioned) {
+                        // Let the widget finish its own placement (150 ms) so the
+                        // companion does not jump right after appearing.
+                        delay(250)
+                        positioned = true
+                    }
+                    val bounds = mainBounds ?: main.bounds
+                    val placement = WindowStateStore.glueCluster(
+                        main = bounds,
+                        clipboardWidth = window.width,
+                        scratchpadWidth = if (ScratchpadWindow.isVisible) {
+                            scratchpadWindowHandle?.width ?: 0
+                        } else {
+                            0
+                        },
+                        height = window.height
+                    )
+                    placement.clipboard?.let { point ->
+                        runCatching { window.setLocation(point.x, point.y) }
+                    }
+                    if (placement.main.x != bounds.x || placement.main.y != bounds.y) {
+                        runCatching { main.setLocation(placement.main.x, placement.main.y) }
+                    }
+                }
+
+                JotterTheme(
+                    isDarkTheme = isDark,
+                    isTrueBlackEnabled = preferences.isTrueBlackEnabled,
+                    isDynamicColor = preferences.isDynamicColor,
+                    isHapticEnabled = preferences.isHapticEnabled,
+                    language = preferences.appLanguage
+                ) {
+                    Box(modifier = Modifier.fillMaxSize().padding(7.dp)) {
+                        Surface(
+                            modifier = Modifier.fillMaxSize(),
+                            shape = WidgetShape,
+                            color = MaterialTheme.colorScheme.background,
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.45f)
+                            ),
+                            shadowElevation = 14.dp
+                        ) {
+                            ClipboardScreen(
+                                window = window,
+                                onClose = { ClipboardWindow.hide() },
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
         // General note: a second, title-less window glued to the right of the
         // widget. Same app theme, no navigation, just plain text.
         // ------------------------------------------------------------------
@@ -482,11 +581,19 @@ fun main() {
                 alwaysOnTop = true
             ) {
                 LaunchedEffect(alwaysOnTop) { window.isAlwaysOnTop = alwaysOnTop }
+                SideEffect { scratchpadWindowHandle = window }
 
                 // Glue to the right edge of the notes window, following it when
-                // it is dragged or re-anchored.
+                // it is dragged or re-anchored. The clipboard window counts
+                // too, so the three of them stay in a single row.
                 var positioned by remember { mutableStateOf(false) }
-                LaunchedEffect(isVisible, scratchpadAllowed, mainBounds) {
+                LaunchedEffect(
+                    isVisible,
+                    scratchpadAllowed,
+                    mainBounds,
+                    clipboardWindowHandle,
+                    ClipboardWindow.isVisible
+                ) {
                     if (!isVisible || !scratchpadAllowed) return@LaunchedEffect
                     val main = mainWindowHandle ?: return@LaunchedEffect
                     if (!positioned) {
@@ -496,14 +603,21 @@ fun main() {
                         positioned = true
                     }
                     val bounds = mainBounds ?: main.bounds
-                    val placement = WindowStateStore.glueRight(bounds, window.width, window.height)
-                    runCatching {
-                        window.setLocation(placement.scratchpad.x, placement.scratchpad.y)
+                    val placement = WindowStateStore.glueCluster(
+                        main = bounds,
+                        clipboardWidth = if (ClipboardWindow.isVisible) {
+                            clipboardWindowHandle?.width ?: 0
+                        } else {
+                            0
+                        },
+                        scratchpadWidth = window.width,
+                        height = window.height
+                    )
+                    placement.scratchpad?.let { point ->
+                        runCatching { window.setLocation(point.x, point.y) }
                     }
-                    if (placement.mainShiftX != 0) {
-                        runCatching {
-                            main.setLocation(main.x + placement.mainShiftX, main.y)
-                        }
+                    if (placement.main.x != bounds.x || placement.main.y != bounds.y) {
+                        runCatching { main.setLocation(placement.main.x, placement.main.y) }
                     }
                 }
 
@@ -555,6 +669,11 @@ fun main() {
                     appStrings.generalNote,
                     checked = ScratchpadWindow.isVisible,
                     onCheckedChange = { if (it) ScratchpadWindow.show() else ScratchpadWindow.hide() }
+                )
+                CheckboxItem(
+                    appStrings.clipboard,
+                    checked = ClipboardWindow.isVisible,
+                    onCheckedChange = { if (it) ClipboardWindow.show() else ClipboardWindow.hide() }
                 )
                 Separator()
                 Item(appStrings.quit, onClick = quit)

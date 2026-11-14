@@ -68,6 +68,18 @@ kbuildsycoca6 --noincremental
 
 As notas ficam no SQLite local do usuário (Room/SQLite). A sincronização com o servidor é configurada em **Configurações → Sincronização** e é opcional.
 
+## Janelas do desktop
+
+O Jotter é um widget: as janelas ficam em uma fileira, presas umas às outras, e a linha inteira desliza para caber na tela quando chega perto de uma borda.
+
+| Janela | Onde fica | Para quê |
+| --- | --- | --- |
+| notas | centro | a lista e as notas |
+| nota geral | à direita | o rascunho sem título, salvo no banco |
+| área de transferência | à esquerda | o clipboard do sistema, editável |
+
+A janela da área de transferência não guarda nada: o texto é o próprio clipboard. Ela mostra o que está copiado, e o que você digita ali vai para o clipboard depois de uma pausa curta (o botão de recarregar traz o conteúdo atual de volta, descartando a edição). Um copiar feito em outro aplicativo aparece sozinho, sem passar por cima do que ainda está sendo digitado. Ela vem desligada por padrão e é ligada pelo ícone de colar na barra de busca ou pelo menu da bandeja; o estado fica salvo.
+
 ## Estrutura
 
 ```
