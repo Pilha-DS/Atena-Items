@@ -18,6 +18,7 @@ package com.openappslabs.jotter.ui.screens.clipboardscreen
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -48,17 +49,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.openappslabs.jotter.platform.ClipboardContent
 import com.openappslabs.jotter.platform.Diagnostics
+import com.openappslabs.jotter.platform.readSystemClipboard
+import com.openappslabs.jotter.platform.toImageBitmap
+import com.openappslabs.jotter.platform.writeSystemClipboardText
 import com.openappslabs.jotter.ui.i18n.LocalStrings
 import com.openappslabs.jotter.ui.theme.rememberJotterHaptics
 import kotlinx.coroutines.delay
@@ -74,11 +79,12 @@ private const val PUSH_DELAY_MS = 400L
 /**
  * Editor for whatever is in the system clipboard right now.
  *
- * It is not a note: nothing is stored in the database. The text is read from
- * the clipboard when the window appears (and again whenever something else
- * copies while it is open) and every edit is written back, so the clipboard
- * itself is what gets edited. Edits are only pushed after a short pause, which
- * keeps one long paste from filling the clipboard history of Klipper with every
+ * It is not a note: nothing is stored in the database. The content is read
+ * from the clipboard when the window appears (and again whenever something
+ * else copies while it is open). Text edits are written back, so the clipboard
+ * itself is what gets edited; a picture is shown as a preview, since there is
+ * nothing to edit. Edits are only pushed after a short pause, which keeps one
+ * long paste from filling the clipboard history of Klipper with every
  * intermediate keystroke.
  */
 @Composable
@@ -89,29 +95,67 @@ fun ClipboardScreen(
 ) {
     val haptics = rememberJotterHaptics()
     val strings = LocalStrings.current
-    val clipboard = LocalClipboardManager.current
 
     var text by remember { mutableStateOf("") }
+    // Set while the clipboard holds a picture: the editor is text-only, so the
+    // window shows the image instead of an empty field.
+    var image by remember { mutableStateOf<ImageBitmap?>(null) }
     // Last value known to be the clipboard content: what was read on open, or
     // what this editor wrote. It is what tells an outside copy apart from our
     // own write, and what keeps unsaved edits from being overwritten.
     var syncedText by remember { mutableStateOf("") }
+    // Fingerprint of the picture on screen, so an unchanged clipboard is not
+    // decoded again on every poll.
+    var syncedImage by remember { mutableStateOf<String?>(null) }
     var loaded by remember { mutableStateOf(false) }
 
-    fun readClipboard(): String? = runCatching { clipboard.getText()?.text }.getOrNull()
+    fun applyClipboardContent(content: ClipboardContent) {
+        when (content) {
+            is ClipboardContent.Text -> {
+                text = content.value
+                syncedText = content.value
+                image = null
+                syncedImage = null
+            }
+
+            is ClipboardContent.Image -> {
+                text = ""
+                syncedText = ""
+                image = content.toImageBitmap()
+                syncedImage = content.signature
+            }
+
+            // Already on screen; keep the decoded bitmap instead of rebuilding it.
+            is ClipboardContent.ImageRepeat -> Unit
+
+            ClipboardContent.Empty -> {
+                text = ""
+                syncedText = ""
+                image = null
+                syncedImage = null
+            }
+        }
+    }
 
     fun writeClipboard(value: String) {
-        runCatching { clipboard.setText(AnnotatedString(value)) }
-            .onSuccess { syncedText = value }
-            .onFailure { Diagnostics.log("clipboard write failed: ${it.message}") }
+        if (writeSystemClipboardText(value)) {
+            syncedText = value
+            syncedImage = null
+        }
     }
 
     LaunchedEffect(Unit) {
-        val current = readClipboard().orEmpty()
-        text = current
-        syncedText = current
+        val content = readSystemClipboard()
+        applyClipboardContent(content)
         loaded = true
-        Diagnostics.log("clipboard window opened: ${current.length} chars")
+        Diagnostics.log(
+            "clipboard window opened: " + when (content) {
+                is ClipboardContent.Image -> "image"
+                is ClipboardContent.ImageRepeat -> "image"
+                is ClipboardContent.Text -> "${content.value.length} chars"
+                ClipboardContent.Empty -> "empty"
+            }
+        )
     }
 
     // Something else copied while the window is open: show it, but never on
@@ -120,19 +164,42 @@ fun ClipboardScreen(
         while (true) {
             delay(POLL_INTERVAL_MS)
             if (!window.isShowing) continue
-            val current = readClipboard() ?: continue
-            if (current == syncedText) continue
-            if (text == syncedText) {
-                text = current
-                Diagnostics.log("clipboard read from system: ${current.length} chars")
+            when (val content = readSystemClipboard(syncedImage)) {
+                is ClipboardContent.ImageRepeat -> Unit
+
+                is ClipboardContent.Image -> {
+                    if (content.signature == syncedImage) continue
+                    if (text == syncedText) {
+                        text = ""
+                        syncedText = ""
+                        image = content.toImageBitmap()
+                        Diagnostics.log("clipboard image read from system")
+                    }
+                    // Remembered either way, so a copy that arrived during an
+                    // edit is not decoded again on every poll.
+                    syncedImage = content.signature
+                }
+
+                is ClipboardContent.Text -> {
+                    if (content.value == syncedText) continue
+                    if (text == syncedText) {
+                        text = content.value
+                        image = null
+                        syncedImage = null
+                        Diagnostics.log("clipboard read from system: ${content.value.length} chars")
+                    }
+                    syncedText = content.value
+                }
+
+                ClipboardContent.Empty -> Unit
             }
-            syncedText = current
         }
     }
 
-    // Every edit goes back to the system clipboard once typing settles.
+    // Every edit goes back to the system clipboard once typing settles. A
+    // picture is not editable here, so it is never written back.
     LaunchedEffect(text, loaded) {
-        if (!loaded || text == syncedText) return@LaunchedEffect
+        if (!loaded || image != null || text == syncedText) return@LaunchedEffect
         delay(PUSH_DELAY_MS)
         writeClipboard(text)
     }
@@ -141,7 +208,7 @@ fun ClipboardScreen(
     // to reach the clipboard before the state goes away with it.
     DisposableEffect(Unit) {
         onDispose {
-            if (loaded && text != syncedText) writeClipboard(text)
+            if (loaded && image == null && text != syncedText) writeClipboard(text)
         }
     }
 
@@ -163,9 +230,7 @@ fun ClipboardScreen(
             window = window,
             onReload = {
                 haptics.click()
-                val current = readClipboard().orEmpty()
-                text = current
-                syncedText = current
+                applyClipboardContent(readSystemClipboard())
             },
             onClose = {
                 haptics.click()
@@ -178,23 +243,50 @@ fun ClipboardScreen(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            BasicTextField(
-                value = text,
-                onValueChange = { text = it },
-                textStyle = textStyle,
-                cursorBrush = cursorBrush,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-                    .verticalScroll(scrollState)
-            )
-            if (text.isEmpty() && loaded) {
-                Text(
-                    text = strings.clipboardEmpty,
-                    style = textStyle,
-                    color = placeholderColor,
-                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 0.dp)
+            val bitmap = image
+            if (bitmap != null) {
+                // A picture cannot be edited in place, but showing it is the
+                // whole point: the clipboard window is also the preview.
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Image(
+                        bitmap = bitmap,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    )
+                    Text(
+                        text = strings.clipboardImage,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = placeholderColor,
+                        modifier = Modifier.padding(top = 6.dp)
+                    )
+                }
+            } else {
+                BasicTextField(
+                    value = text,
+                    onValueChange = { text = it },
+                    textStyle = textStyle,
+                    cursorBrush = cursorBrush,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+                        .verticalScroll(scrollState)
                 )
+                if (text.isEmpty() && loaded) {
+                    Text(
+                        text = strings.clipboardEmpty,
+                        style = textStyle,
+                        color = placeholderColor,
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 0.dp)
+                    )
+                }
             }
         }
     }

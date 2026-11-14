@@ -76,7 +76,7 @@ O Jotter é um widget: as janelas ficam em uma fileira, presas umas às outras, 
 | --- | --- | --- |
 | notas | centro | a lista e as notas |
 | nota geral | à direita | o rascunho sem título, salvo no banco |
-| área de transferência | à esquerda | o clipboard do sistema, editável |
+| área de transferência | à esquerda | o clipboard do sistema, com texto editável e prévia de imagens |
 
 A janela da área de transferência não guarda nada: o texto é o próprio clipboard. Ela mostra o que está copiado, e o que você digita ali vai para o clipboard depois de uma pausa curta (o botão de recarregar traz o conteúdo atual de volta, descartando a edição). Um copiar feito em outro aplicativo aparece sozinho, sem passar por cima do que ainda está sendo digitado. Ela vem desligada por padrão e é ligada pelo ícone de colar na barra de busca ou pelo menu da bandeja; o estado fica salvo.
 

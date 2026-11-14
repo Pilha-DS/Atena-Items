@@ -369,6 +369,7 @@ interface AppStrings {
     val clipboard: String
     val clipboardTitle: String
     val clipboardEmpty: String
+    val clipboardImage: String
     val closeClipboard: String
     val reloadClipboard: String
     val showWidget: String
@@ -724,6 +725,7 @@ object EnglishStrings : BaseStrings() {
     override val clipboard = "Clipboard"
     override val clipboardTitle = "Jotter · Clipboard"
     override val clipboardEmpty = "The clipboard is empty — type to put something in it"
+    override val clipboardImage = "Image in the clipboard"
     override val closeClipboard = "Close clipboard"
     override val reloadClipboard = "Reload from clipboard"
     override val showWidget = "Show widget"
@@ -1077,6 +1079,7 @@ object PortugueseStrings : BaseStrings() {
     override val clipboard = "Área de transferência"
     override val clipboardTitle = "Jotter · Área de transferência"
     override val clipboardEmpty = "A área de transferência está vazia — digite para colocá-la aí"
+    override val clipboardImage = "Imagem na área de transferência"
     override val closeClipboard = "Fechar área de transferência"
     override val reloadClipboard = "Recarregar da área de transferência"
     override val showWidget = "Mostrar widget"

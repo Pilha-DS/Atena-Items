@@ -24,8 +24,9 @@ import androidx.compose.runtime.setValue
  * Visibility of the clipboard window.
  *
  * A third desktop-shell window, glued to the left of the widget (the general
- * note is glued to the right). It holds no data of its own: the text is the
- * system clipboard, so there is nothing to flush when it is hidden.
+ * note is glued to the right). It holds no data of its own: the content is the
+ * system clipboard — text is editable in place, a picture is shown as a
+ * preview — so there is nothing to flush when it is hidden.
  */
 object ClipboardWindow {
 
