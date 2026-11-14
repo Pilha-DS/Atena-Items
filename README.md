@@ -24,7 +24,7 @@ notes/
 └── linux/                  # port desktop + widget Plasma 6 (Gradle próprio)
 server/                     # Atena Hub (Gradle próprio + Docker)
 search/                     # fork do Vicinae, build CMake/Ninja
-scripts/                    # ferramentas que cruzam projetos (assinatura Android)
+scripts/                    # instalador Linux e assinatura dos APKs
 LICENSE                     # GNU GPL v3.0
 ```
 
@@ -41,6 +41,35 @@ LICENSE                     # GNU GPL v3.0
 
 Os projetos Gradle trazem o Wrapper (`./gradlew`), então não é preciso instalar
 o Gradle.
+
+## 🐧 Instalação no Linux (Arch + KDE Plasma 6)
+
+Um comando instala tudo na máquina — apps, lançadores, autostart e os widgets do
+Plasma:
+
+```bash
+./scripts/install-linux.sh              # notas + agenda + @Search
+./scripts/install-linux.sh --hub        # inclui o Atena Hub (docker compose)
+./scripts/install-linux.sh --check      # confere o ambiente, não instala nada
+./scripts/install-linux.sh --only notes
+./scripts/install-linux.sh --uninstall  # remove (preserva seus dados)
+```
+
+Ele confere distro e Plasma, instala via `pacman` só o que falta (JDK 21, docker,
+`jq`, `qt6-tools`…), garante `~/.local/bin` no PATH da sessão gráfica, chama o
+`install.sh` de cada projeto, **registra os widgets sem colocar nada no painel** e
+verifica o resultado artefato por artefato.
+
+Depois de instalar: **Super+N** abre o Notes, **Super+C** abre a Agenda, e os
+widgets aparecem em *botão direito no painel → Adicionar widgets…*.
+
+O que precisa de root (uinput/`setcap` para colar e snippets no `@Search`, grupo
+`docker`) é listado no fim como pendência explícita — o script não roda `sudo`
+escondido.
+
+> Mudou o que um projeto instala ou exige? A regra
+> [`.cursor/rules/installer-sync.mdc`](.cursor/rules/installer-sync.mdc) tem o
+> checklist do que atualizar no instalador.
 
 ## Começando
 

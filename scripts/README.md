@@ -3,6 +3,54 @@
 Ferramentas que cruzam os projetos do monorepo. Não criam dependência de build
 entre eles: só orquestram comandos que cada projeto já sabe rodar.
 
+| Script | Para quê |
+| --- | --- |
+| `install-linux.sh` | instala tudo no Arch + KDE Plasma 6 (apps, widgets, deps, hub) |
+| `android-release.sh` | builda APKs de release assinados com o cofre persistente |
+
+## `install-linux.sh`
+
+Porta de entrada do monorepo numa máquina Arch Linux com KDE Plasma 6.
+
+```bash
+./scripts/install-linux.sh              # notas + agenda + @Search
+./scripts/install-linux.sh --hub        # + Atena Hub (docker compose)
+./scripts/install-linux.sh --check      # confere ambiente e estado, não altera nada
+./scripts/install-linux.sh --only notes,search
+./scripts/install-linux.sh --uninstall  # remove (preserva dados)
+```
+
+| Etapa | O que faz |
+| --- | --- |
+| ambiente | exige Arch (ou `--force`) e detecta Plasma 6 |
+| dependências | `pacman -S --needed` só do que falta (`PACMAN_PKGS`) |
+| configuração | cria `~/.local/state/atena`, põe `~/.local/bin` no PATH via `~/.config/environment.d` |
+| apps | chama o `install.sh` de `notes/linux`, `agenda/linux` e do `@Search` |
+| widgets | `kpackagetool6` registra os applets — aparecem em "Adicionar widgets", **nada entra no painel** |
+| hub | opcional: `docker compose up -d --build` + espera o `/health` |
+| verificação | confere cada arquivo instalado e cada widget registrado |
+
+Detalhes que valem saber:
+
+- **O build fica com cada projeto.** O script não repete `gradlew` nem cópia de
+  arquivo; ele chama o instalador do projeto, que é a fonte de verdade.
+- **Root só onde é inevitável:** `pacman`, e as pendências opcionais de
+  `modprobe uinput` / `setcap` / grupo `docker`, listadas no fim para você rodar.
+- **Widget ≠ applet.** `kde/` guarda também kwin scripts (o do Notes tem
+  `metadata.json`); só o que declara `"KPackageStructure": "Plasma/Applet"` é
+  registrado como widget.
+- **Idempotente.** Rodar de novo atualiza o que mudou e não duplica registro.
+- **O @Search aceita a pasta com outro nome.** `detect_search_dir` procura
+  qualquer `search*` que tenha `scripts/install.sh`, porque o fork pode ser
+  renomeado no disco.
+
+### Depois de mudar um projeto
+
+Se a mudança altera o que precisa existir na máquina (pacote, widget, atalho,
+autostart, binário em `~/.local`), atualize este script no mesmo commit — o
+checklist está em
+[`.cursor/rules/installer-sync.mdc`](../.cursor/rules/installer-sync.mdc).
+
 ## `android-release.sh`
 
 Builda os APKs Android de release dos dois apps — Notas (`notes/Android`) e

@@ -45,6 +45,7 @@ search/           Vicinae, fork do upstream versionado junto (CMake/Ninja)
 | `notes/linux` | `./gradlew :app:run` · `:app:createDistributable` · `build` |
 | `server` | `./gradlew run` · `test` · `docker compose up -d --build` |
 | `search` | `make release` · `make test` · `make qmllint` |
+| raiz (`scripts/`) | `./scripts/install-linux.sh` · `./scripts/android-release.sh` |
 
 ## Antes de dizer "pronto"
 

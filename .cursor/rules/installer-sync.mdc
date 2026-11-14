@@ -1,0 +1,47 @@
+---
+description: Mantém scripts/install-linux.sh em sincronia com o que cada projeto instala e exige
+alwaysApply: true
+---
+
+# O instalador acompanha a mudança
+
+`scripts/install-linux.sh` é a porta de entrada do monorepo no Arch + KDE
+Plasma 6. Ele instala deps, chama o `install.sh` de cada projeto, registra os
+widgets e verifica o resultado. Toda mudança que altere **o que precisa existir
+na máquina** tem que ser refletida nele no mesmo commit — senão a instalação
+limpa quebra numa máquina nova, e o problema só aparece no KDE do usuário.
+
+## Checklist
+
+Antes de fechar o commit, procure a linha que a sua mudança afeta:
+
+| Mudança | Onde mexer no `install-linux.sh` |
+| --- | --- |
+| pacote novo (lib, JDK, Qt, runtime) | array `PACMAN_PKGS` |
+| dependência que não vem de pacote | `install_deps` ou `configure_environment` |
+| app/projeto novo | variável `DO_*`, `--only`, uma função `install_<x>`, `uninstall` e `verify` |
+| widget/plasmoid novo | nada a fazer se o `metadata.json` tem `"KPackageStructure": "Plasma/Applet"`; confira em `--check` |
+| widget que **não** é applet (kwin script, tema) | não registre com `kpackagetool6 --type Plasma/Applet`; instale no caminho certo |
+| atalho global novo | entrada `.desktop` com `X-KDE-Shortcuts` + linha em `verify` |
+| autostart / processo em segundo plano | `verify_file` do `.desktop` em `$CONFIG_HOME/autostart` |
+| arquivo novo em `~/.config`, `~/.local/bin`, `~/.local/opt` | verificação em `verify` e remoção em `uninstall` |
+| binário que precisa de root (setcap, uinput, grupo) | `root_followups`, nunca `sudo` escondido |
+| serviço/porta do hub | `install_hub` e a checagem de `/health` |
+| pasta de projeto renomeada | `detect_search_dir` e os caminhos derivados |
+| mudança no `install.sh` de um projeto | confira que `--only <projeto>` continua idempotente |
+
+## Regras de manutenção
+
+- **Um instalador por projeto.** O geral orquestra; não reimplemente build,
+  cópia de arquivo ou geração de `.desktop` que o projeto já faz.
+- **Nada de root** fora de `pacman`, `modprobe`, `setcap` e `usermod` — e esses
+  ficam isolados e visíveis (mensagem antes, comando no resumo).
+- **Idempotente.** Rodar duas vezes não pode duplicar registro de widget, linha
+  no PATH nem entrada de autostart.
+- **Uninstall acompanha o install.** O que for criado precisa ser removido em
+  `uninstall`, preservando dados do usuário (`~/.config/<app>`, bancos, volumes).
+- **Sem `cond && comando` quando a condição pode ser falsa** se o `set -e`
+  estiver ativo — use `if`.
+- Antes de encerrar: `bash -n scripts/install-linux.sh`,
+  `./scripts/install-linux.sh --check` e o `--only <projeto>` que você mexeu.
+- Atualize também a tabela do `README.md` da raiz e o `scripts/README.md`.
