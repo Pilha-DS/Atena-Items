@@ -94,6 +94,13 @@ private fun CalendarTitle(state: AgendaState) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
+        RefreshButton(
+            running = state.syncState.running,
+            onClick = {
+                // Not configured yet: the refresh is what leads to the settings.
+                if (state.syncState.configured) state.syncNow() else state.openSyncSettings()
+            }
+        )
         ArrowButton("‹", Strings.previousPeriod, state::previousPeriod)
         PlainButton(Strings.today, state::goToday)
         ArrowButton("›", Strings.nextPeriod, state::nextPeriod)
@@ -330,6 +337,20 @@ private fun ArrowButton(glyph: String, description: String, onClick: () -> Unit)
             text = glyph,
             fontSize = 18.sp,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
+        )
+    }
+}
+
+@Composable
+private fun RefreshButton(running: Boolean, onClick: () -> Unit) {
+    Box(
+        modifier = Modifier.size(26.dp).clip(CircleShape).clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = "↻",
+            fontSize = 15.sp,
+            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (running) 0.45f else 0.9f)
         )
     }
 }

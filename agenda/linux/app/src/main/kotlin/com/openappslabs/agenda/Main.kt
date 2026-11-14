@@ -221,6 +221,10 @@ fun main(args: Array<String>) {
                 window.isVisible = true
                 window.toFront()
                 window.requestFocus()
+                // A change made elsewhere — the AI chat writes straight to the
+                // database, and the sync pulls from the hub — has to be on
+                // screen as soon as the window opens, not on the next tick.
+                state.tick()
                 statusPublisher.publish()
                 Startup.mark("window-shown")
             } else {

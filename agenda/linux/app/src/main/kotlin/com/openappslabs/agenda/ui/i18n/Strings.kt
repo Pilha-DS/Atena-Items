@@ -56,6 +56,7 @@ object Strings {
 
     const val sync = "Sincronizar"
     const val syncing = "Sincronizando…"
+    const val syncNow = "Sincronizar agora"
     const val settings = "Ajustes"
     const val settingsTitle = "Ajustes"
     const val windowSection = "Janela"
@@ -93,4 +94,7 @@ object Strings {
 
     fun eventCount(count: Int): String =
         if (count == 1) eventCountOne else eventCountMany.format(count)
+
+    /** "Sincronizado: 2 enviados, 1 recebido" — the answer to the refresh button. */
+    fun syncDone(pushed: Int, pulled: Int): String = "Sincronizado: $pushed enviados, $pulled recebidos"
 }

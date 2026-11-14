@@ -64,15 +64,17 @@ fun SyncSettingsDialog(
     onToggleCloseOnClickOutside: (Boolean) -> Unit,
     onClose: () -> Unit,
     onSave: (String, String, String) -> String?,
+    onRefresh: (String, String, String, (String) -> Unit) -> String?,
     onDisconnect: () -> Unit,
     onTest: (String, String, (String) -> Unit) -> Unit
 ) {
     var url by remember(config) { mutableStateOf(config.serverUrl) }
     var token by remember(config) { mutableStateOf(config.token) }
     var deviceName by remember(config) { mutableStateOf(config.deviceName) }
-    var error by remember(config) { mutableStateOf<String?>(null) }
-    var testMessage by remember(config) { mutableStateOf<String?>(null) }
-    var testing by remember(config) { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var testing by remember { mutableStateOf(false) }
+    var syncing by remember { mutableStateOf(false) }
 
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f)),
@@ -128,7 +130,7 @@ fun SyncSettingsDialog(
 
                 OutlinedTextField(
                     value = url,
-                    onValueChange = { url = it; error = null; testMessage = null },
+                    onValueChange = { url = it; error = null; message = null },
                     label = { Text(Strings.serverUrl) },
                     placeholder = { Text(Strings.serverUrlHint) },
                     singleLine = true,
@@ -137,7 +139,7 @@ fun SyncSettingsDialog(
 
                 OutlinedTextField(
                     value = token,
-                    onValueChange = { token = it; error = null; testMessage = null },
+                    onValueChange = { token = it; error = null; message = null },
                     label = { Text(Strings.token) },
                     placeholder = { Text(Strings.tokenHint) },
                     singleLine = true,
@@ -159,28 +161,47 @@ fun SyncSettingsDialog(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TextButton(
-                        enabled = !testing,
+                        enabled = !syncing && !testing && url.isNotBlank() && token.isNotBlank(),
+                        onClick = {
+                            syncing = true
+                            message = null
+                            error = null
+                            val failure = onRefresh(url, token, deviceName) { result ->
+                                message = result
+                                syncing = false
+                            }
+                            if (failure != null) {
+                                error = failure
+                                syncing = false
+                            }
+                        }
+                    ) {
+                        Text(if (syncing) Strings.syncing else Strings.syncNow)
+                    }
+                    TextButton(
+                        enabled = !testing && !syncing,
                         onClick = {
                             testing = true
-                            testMessage = null
-                            onTest(url, token) { message ->
-                                testMessage = message
+                            message = null
+                            onTest(url, token) { result ->
+                                message = result
                                 testing = false
                             }
                         }
                     ) {
                         Text(if (testing) Strings.testing else Strings.testConnection)
                     }
-                    Text(
-                        text = lastSyncLine(config),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
                 }
 
-                testMessage?.let { message ->
+                Text(
+                    text = lastSyncLine(config),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                message?.let { text ->
                     Text(
-                        text = message,
+                        text = text,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.primary
                     )

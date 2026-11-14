@@ -266,6 +266,46 @@ class AgendaState(
 
     /** Returns a message for the dialog to show, or `null` when it was saved. */
     fun saveSyncSettings(url: String, token: String, deviceName: String): String? {
+        val error = applySyncConfig(url, token, deviceName)
+        if (error != null) return error
+
+        syncOpen = false
+        scope.launch { syncEngine.syncNow() }
+        return null
+    }
+
+    /**
+     * The dialog's refresh button: applies what is typed (so a URL just edited
+     * is the one used) and pulls right away, reporting the result in the dialog
+     * instead of closing it.
+     */
+    fun refreshFromSettings(
+        url: String,
+        token: String,
+        deviceName: String,
+        onResult: (String) -> Unit
+    ): String? {
+        val error = applySyncConfig(url, token, deviceName)
+        if (error != null) return error
+
+        scope.launch {
+            syncEngine.syncNow()
+            onResult(syncResultLine())
+        }
+        return null
+    }
+
+    private fun syncResultLine(): String {
+        val updated = syncEngine.state.value
+        if (updated.error == null) return Strings.syncDone(updated.pushed, updated.pulled)
+        return when (updated.error) {
+            SyncErrorKind.UNAUTHORIZED -> Strings.unauthorized
+            else -> Strings.offline
+        }
+    }
+
+    /** Validates and persists; `null` means it was applied. */
+    private fun applySyncConfig(url: String, token: String, deviceName: String): String? {
         val cleanUrl = url.trim()
         val cleanToken = token.trim()
         if (cleanUrl.isEmpty()) return Strings.errorServerUrl
@@ -284,8 +324,6 @@ class AgendaState(
             )
         }
         syncConfig = updated
-        syncOpen = false
-        scope.launch { syncEngine.syncNow() }
         return null
     }
 

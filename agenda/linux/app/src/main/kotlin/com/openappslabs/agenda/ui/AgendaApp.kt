@@ -83,6 +83,7 @@ fun AgendaApp(state: AgendaState, kdeGlobals: Path) {
                     onToggleCloseOnClickOutside = state::updateCloseOnClickOutside,
                     onClose = state::closeSyncSettings,
                     onSave = state::saveSyncSettings,
+                    onRefresh = state::refreshFromSettings,
                     onDisconnect = state::disconnect,
                     onTest = state::testConnection
                 )
