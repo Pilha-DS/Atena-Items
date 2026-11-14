@@ -100,6 +100,8 @@ Categories=Office;Calendar;
 Keywords=agenda;calendar;calendario;eventos;
 StartupNotify=false
 StartupWMClass=agenda
+# Global shortcut registered by KGlobalAccel (System Settings -> Shortcuts).
+X-KDE-Shortcuts=Meta+C
 EOF
 
     if command -v update-desktop-database >/dev/null 2>&1; then
@@ -223,6 +225,7 @@ If the widget does not show up in that list, reload the shell:
 
 Day to day:
   panel card    shows the time/date and opens the Agenda window
+  Super+C       same, from anywhere in the session
   launcher      same, via $BIN_DIR/agenda-toggle
   sync          Settings -> Sincronização inside the app
   notify        Settings -> Notificações inside the app (resumo e lembretes)

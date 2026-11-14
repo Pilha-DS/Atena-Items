@@ -65,6 +65,14 @@ Depois de instalar, adicione o widget: botão direito no painel → **Adicionar 
 systemctl --user restart plasma-plasmashell
 ```
 
+### Atalho global
+
+A entrada `.desktop` declara `X-KDE-Shortcuts=Meta+C`, então o **Super+C** mostra/esconde a Agenda de qualquer lugar, mesmo com o autostart já a deixando rodando escondida. O atalho é registrado pelo KGlobalAccel e aparece em **Configurações do sistema → Atalhos → Aplicativos → Agenda**, onde pode ser trocado. Se não responder logo após uma reinstalação:
+
+```bash
+kbuildsycoca6 --noincremental
+```
+
 ### O widget
 
 - **Representação compacta** (no painel): cartão escuro com a hora (`hh:mm`) na primeira linha e a data (`dd/MM/yy`) na segunda. Clicar mostra/esconde a janela, posicionada logo abaixo do ícone.
