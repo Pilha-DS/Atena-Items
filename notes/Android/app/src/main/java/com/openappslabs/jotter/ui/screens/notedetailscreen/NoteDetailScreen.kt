@@ -42,6 +42,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -236,6 +237,13 @@ fun NoteDetailScreen(
 
     val isTrashed = uiState.isTrashed
 
+    // Read mode is a reader, not an editor that refuses keystrokes: the title
+    // and the body are plain text inside a SelectionContainer, so a long press
+    // selects a word and the copy menu shows up. A read-only field keeps a
+    // caret and, in some formats, never offers the selection handles at all,
+    // which is what made copying impossible here.
+    val isReadOnly = isViewMode || isTrashed || !uiState.isUnlocked
+
     Scaffold(
         containerColor = MaterialTheme.colorScheme.surface,
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
@@ -363,11 +371,10 @@ fun NoteDetailScreen(
                     .verticalScroll(scrollState)
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
-                        indication = null
+                        indication = null,
+                        enabled = !isReadOnly
                     ) {
-                        if (!isTrashed && !isViewMode) {
-                            contentFocusRequester.requestFocus()
-                        }
+                        contentFocusRequester.requestFocus()
                     }
                     .padding(horizontal = 16.dp)
                     .navigationBarsPadding()
@@ -405,49 +412,69 @@ fun NoteDetailScreen(
 
                 if (uiState.isUnlocked) {
                     Spacer(modifier = Modifier.height(8.dp))
-                    BasicTextField(
-                        value = uiState.title,
-                        onValueChange = { viewModel.updateTitle(it) },
-                        readOnly = isViewMode || isTrashed || !uiState.isUnlocked,
-                        textStyle = titleStyle,
-                        cursorBrush = cursorBrush,
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Words,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = { contentFocusRequester.requestFocus() }
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(titleFocusRequester),
-                        decorationBox = { innerTextField ->
-                            Box {
-                                if (uiState.title.isEmpty() && !isViewMode && !isTrashed) {
-                                    Text(
-                                        text = strings.untitled,
-                                        style = titleStyle.copy(color = onSurfaceColor.copy(alpha = 0.3f))
-                                    )
-                                }
-                                innerTextField()
-                            }
+                    if (isReadOnly) {
+                        SelectionContainer {
+                            Text(
+                                text = uiState.title,
+                                style = titleStyle,
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
-                    )
+                    } else {
+                        BasicTextField(
+                            value = uiState.title,
+                            onValueChange = { viewModel.updateTitle(it) },
+                            textStyle = titleStyle,
+                            cursorBrush = cursorBrush,
+                            keyboardOptions = KeyboardOptions(
+                                capitalization = KeyboardCapitalization.Words,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onNext = { contentFocusRequester.requestFocus() }
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(titleFocusRequester),
+                            decorationBox = { innerTextField ->
+                                Box {
+                                    if (uiState.title.isEmpty()) {
+                                        Text(
+                                            text = strings.untitled,
+                                            style = titleStyle.copy(color = onSurfaceColor.copy(alpha = 0.3f))
+                                        )
+                                    }
+                                    innerTextField()
+                                }
+                            }
+                        )
+                    }
                     Spacer(modifier = Modifier.height(8.dp))
-                    if (isViewMode && uiState.format.isRich && !isTrashed) {
+                    when {
                         // Read mode renders the plain text with the note's own
                         // language. Nothing is converted: the editor still shows
                         // exactly what is stored.
-                        RichTextView(
-                            text = uiState.content,
-                            format = uiState.format,
-                            baseStyle = contentStyle
-                        )
-                    } else {
-                        BasicTextField(
+                        isReadOnly && uiState.format.isRich && !isTrashed -> SelectionContainer {
+                            RichTextView(
+                                text = uiState.content,
+                                format = uiState.format,
+                                baseStyle = contentStyle
+                            )
+                        }
+
+                        // Plain text in read mode is a Text, not a read-only
+                        // field, so long press/drag selects and copies.
+                        isReadOnly -> SelectionContainer {
+                            Text(
+                                text = uiState.content,
+                                style = contentStyle,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+
+                        else -> BasicTextField(
                             value = uiState.content,
                             onValueChange = { viewModel.updateContent(it) },
-                            readOnly = isViewMode || isTrashed || !uiState.isUnlocked,
                             textStyle = contentStyle,
                             cursorBrush = cursorBrush,
                             keyboardOptions = KeyboardOptions(
@@ -458,7 +485,7 @@ fun NoteDetailScreen(
                                 .focusRequester(contentFocusRequester),
                             decorationBox = { innerTextField ->
                                 Box {
-                                    if (uiState.content.isEmpty() && !isViewMode && !isTrashed) {
+                                    if (uiState.content.isEmpty()) {
                                         Text(
                                             text = strings.startTyping,
                                             style = contentStyle.copy(color = onSurfaceColor.copy(alpha = 0.3f))
