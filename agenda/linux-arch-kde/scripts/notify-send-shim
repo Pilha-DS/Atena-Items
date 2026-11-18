@@ -1,0 +1,112 @@
+#!/usr/bin/env bash
+#
+# AGENDA_NOTIFY_SEND_SHIM_MARKER — identifies another copy of this shim.
+#
+# notify-send that shows Agenda's toast instead of the Plasma notification.
+#
+# The installer puts this in ~/.local/bin, which comes before /usr/bin in the
+# PATH, so scripts of the whole session keep calling `notify-send` and see the
+# card in the top-right corner. Apps that use libnotify directly (Electron,
+# GTK, the Plasma services) do not go through this at all — they talk to
+# org.freedesktop.Notifications themselves, and that only changes if the
+# notification server itself changes.
+#
+# This is a compatibility shim, not a replacement:
+#   - options with semantics we cannot honour (--wait, --action, --print-id,
+#     --replace-id, --hint, --server-info) go straight to the real binary;
+#   - with Agenda not installed, the real binary handles the call;
+#   - if the toast cannot be queued, the real binary still gets the call.
+# So a notification is never silently lost.
+#
+set -euo pipefail
+
+# The original argv, for the paths that hand the call over untouched.
+original=("$@")
+
+# The real notify-send, skipping every copy of this shim that is in the PATH.
+real_notify_send() {
+    local candidate
+    local self
+    self="$(realpath -- "$0" 2>/dev/null || printf '%s\n' "$0")"
+    while IFS= read -r candidate; do
+        [[ -n "$candidate" && -x "$candidate" ]] || continue
+        if [[ "$(realpath -- "$candidate" 2>/dev/null || printf '%s\n' "$candidate")" == "$self" ]]; then
+            continue
+        fi
+        if grep -q "AGENDA_NOTIFY_SEND_SHIM_MARKER" "$candidate" 2>/dev/null; then
+            continue
+        fi
+        printf '%s\n' "$candidate"
+        return 0
+    done < <(type -ap notify-send 2>/dev/null || true)
+    return 1
+}
+
+pass_through() {
+    local real
+    if ! real="$(real_notify_send)"; then
+        echo "notify-send: nem o Agenda nem o notify-send do sistema estão disponíveis" >&2
+        return 1
+    fi
+    exec "$real" "${original[@]}"
+}
+
+# Without agenda-toast the system keeps its own notification: nothing changes.
+if ! command -v agenda-toast >/dev/null 2>&1; then
+    pass_through
+fi
+
+urgency="normal"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        # Understood — and ignored, because the toast has its own shape.
+        -a | --app-name | -t | --expire-time | -i | --icon | -c | --category | -h | --hint)
+            [[ $# -ge 2 ]] || pass_through
+            shift 2
+            ;;
+        --app-name=* | --expire-time=* | --icon=* | --category=* | --hint=*) shift ;;
+        -e | --transient | -d | --persistence) shift ;;
+        # Understood — and mapped.
+        -u | --urgency)
+            [[ $# -ge 2 ]] || pass_through
+            urgency="$2"
+            shift 2
+            ;;
+        --urgency=*)
+            urgency="${1#*=}"
+            shift
+            ;;
+        # End of options: everything after it is summary/body.
+        --)
+            shift
+            break
+            ;;
+        # Anything we do not know means "behave exactly like notify-send".
+        -*) pass_through ;;
+        *) break ;;
+    esac
+done
+
+case "$urgency" in
+    low | normal | critical) ;;
+    *) pass_through ;;
+esac
+
+# notify-send takes a summary and an optional body; more than that is an error
+# there, and it stays an error there.
+if [[ $# -eq 0 || $# -gt 2 ]]; then
+    pass_through
+fi
+
+summary="$1"
+body="${2:-}"
+
+if [[ "$urgency" == "critical" ]]; then
+    if ! agenda-toast --urgent "$summary" "$body"; then
+        pass_through
+    fi
+else
+    if ! agenda-toast "$summary" "$body"; then
+        pass_through
+    fi
+fi

@@ -262,6 +262,30 @@
     <string name="agenda_notify_lead">Minutes before</string>
     <string name="agenda_notify_lead_hint">10</string>
 
+    <!-- Quick timers ("assuntos rápidos") -->
+    <string name="quick_timers">Quick timers</string>
+    <string name="quick_timer_description">Short countdowns for the next few minutes or hours, like the clock timer on your phone. They ring when the time is up.</string>
+    <string name="quick_timer_title_hint">What is it for? (optional)</string>
+    <string name="quick_timer_duration_hint">Time, e.g. 25min or 1h30</string>
+    <string name="quick_timer_start">Start</string>
+    <string name="quick_timer_default_title">Timer</string>
+    <string name="quick_timer_invalid_duration">Type a time between 1 minute and 24 hours.</string>
+    <string name="quick_timer_invalid_duration_short">Invalid time</string>
+    <string name="quick_timer_ends_at">Ends at %s</string>
+    <string name="quick_timer_finished">Finished</string>
+    <string name="quick_timer_running">%s left</string>
+    <string name="quick_timer_empty">No quick timers yet. Type a time above and tap Start.</string>
+    <string name="quick_timer_clear_finished">Clear finished</string>
+    <string name="quick_timer_nothing_to_clear">There is no finished timer to clear.</string>
+    <string name="quick_timer_delete_confirmation">Delete this quick timer?</string>
+    <string name="quick_timer_finished_title">Time is up: %s</string>
+    <string name="quick_timer_finished_body">The quick timer reached zero.</string>
+    <string name="quick_timer_dismiss">Dismiss</string>
+    <string name="quick_timer_channel">Quick timers</string>
+    <string name="quick_timer_menu">Quick timers</string>
+    <string name="quick_timer_preset_minutes">%d min</string>
+    <string name="quick_timer_preset_hours">%d h</string>
+
     <!-- CalDAV sync -->
     <string name="caldav">CalDAV</string>
     <string name="select_caldav_calendars">Select calendars to sync</string>

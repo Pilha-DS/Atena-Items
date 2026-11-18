@@ -1,0 +1,25 @@
+# Catálogo do Atena Docs. Versões são deste projeto: não alinhe com notes/ ou
+# agenda/ sem buildar e testar aqui (regra gradle-deps).
+[versions]
+kotlin = "2.2.21"
+compose = "1.12.2"
+composeMaterial3 = "1.9.0"
+materialIcons = "1.7.3"
+ksp = "2.3.13"
+room = "2.8.5"
+sqlite = "2.7.1"
+coroutines = "1.10.2"
+
+[libraries]
+compose-material3 = { module = "org.jetbrains.compose.material3:material3", version.ref = "composeMaterial3" }
+compose-material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "materialIcons" }
+kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+androidx-room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+androidx-room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+androidx-sqlite-bundled = { module = "androidx.sqlite:sqlite-bundled", version.ref = "sqlite" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+compose = { id = "org.jetbrains.compose", version.ref = "compose" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

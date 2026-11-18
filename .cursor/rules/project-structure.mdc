@@ -1,53 +1,51 @@
 ---
-description: Layout do monorepo, fronteiras entre projetos e comandos de build
+description: Monorepo — projetos independentes, fronteiras, build e o que não versionar
 alwaysApply: true
 ---
 
-# Estrutura do monorepo
+# Monorepo
 
-```
-agenda/
-├── android/      app Android (fork do Fossify, Gradle próprio)
-└── linux/        port desktop + widget Plasma 6 (Gradle próprio)
-notes/Android/    app Android (Gradle próprio)
-notes/linux/      port desktop + widget Plasma 6 (Gradle próprio)
-server/           Atena Hub (Gradle próprio + Docker)
-search/           Vicinae, fork do upstream versionado junto (CMake/Ninja)
-```
+A raiz reúne **projetos independentes**. A lista atual de pastas e o que cada
+uma faz está no `README.md` da raiz — não duplique esse mapa aqui, ele envelhece.
 
-## Regras
+## Fronteiras
 
-- **Cada pasta é um projeto independente.** Nunca crie dependência de build entre
-  elas (`project(":notes")`, `includeBuild`, módulo compartilhado). Projetos se
-  conversam por HTTP, e o ponto de encontro é o `server/`.
-- **Rode o Gradle de dentro do projeto.** `cd server && ./gradlew …`; não existe
-  wrapper na raiz. O mesmo vale para `search/`: `cd search && make …`.
-- **`search/` e `agenda/` são código de terceiro versionado aqui.** Não mova nem
-  reestruture as pastas, não reformate nem "limpe" código do upstream: mudanças
-  nossas ficam concentradas e pequenas, para o diff contra o upstream continuar
-  legível. Commits lá usam o escopo `search` e `agenda`. O `.git` de cada fork
-  não existe dentro do monorepo: o histórico é o daqui, e os arquivos de CI do
-  upstream ficam no `.gitignore` da raiz.
-- **Projeto novo** = uma pasta na raiz com `README.md`, build próprio e a licença
-  referenciada. Atualize a tabela do `README.md` da raiz.
-- **Nunca versione segredos:** `local.properties`, `*.jks`, `*.keystore`, `.env`,
-  bancos `*.db`. Todos já estão no `.gitignore`; não contorne com `-f`.
-- **Artefatos de build** (`build/`, `.gradle/`, `node_modules/`) nunca são
-  commitados.
+- **Cada projeto tem build próprio.** Compile, teste e instale de dentro da pasta
+  dele, com o wrapper/ferramenta que ele já usa.
+- **Nunca crie dependência de build entre projetos** (módulo compartilhado,
+  `includeBuild`, caminho para o build de outro projeto). O que é comum vira
+  contrato, não import.
+- **A integração é por contrato** (HTTP/API, arquivo, protocolo). O ponto de
+  encontro é o serviço central; cliente não abre banco nem lê arquivo interno de
+  outro projeto.
+- **Fork não é biblioteca.** Não extraia código de um fork para "reaproveitar"
+  em outro; isso quebra a sincronização com o upstream.
 
-## Comandos canônicos
+## Build e comandos
 
-| Onde | Comando |
-| --- | --- |
-| `agenda/android` | `./gradlew :app:assembleDebug` · `:app:testDebugUnitTest` |
-| `agenda/linux` | `./gradlew :app:run` · `:app:createDistributable` · `build` |
-| `notes/Android` | `./gradlew :app:assembleDebug` · `:app:testDebugUnitTest` |
-| `notes/linux` | `./gradlew :app:run` · `:app:createDistributable` · `build` |
-| `server` | `./gradlew run` · `test` · `docker compose up -d --build` |
-| `search` | `make release` · `make test` · `make qmllint` |
-| raiz (`scripts/`) | `./scripts/install-linux.sh` · `./scripts/android-release.sh` |
+- O comando canônico de cada projeto está no README/guia dele. Use **de dentro
+  da pasta** (`cd <projeto> && …`); normalmente não há wrapper na raiz.
+- Antes de dizer "pronto", **compile o projeto que você mexeu**. Se a mudança
+  cruza projetos, verifique os dois lados (ex.: contrato novo no servidor e no
+  cliente).
+- Não commite artefato de build nem cache (`build/`, `.gradle/`,
+  `node_modules/`, binários gerados): o `.gitignore` de cada projeto manda.
 
-## Antes de dizer "pronto"
+## Projeto novo
 
-Compile o projeto que você mexeu. Se o cambio cruza projetos (ex.: endpoint novo
-no hub + cliente), verifique os dois lados.
+Uma pasta nova na raiz só entra se tiver:
+
+- `README.md` próprio (o que é, requisitos, build, instalar, configuração,
+  estrutura, problemas comuns, licença);
+- build próprio e reproduzível;
+- licença referenciada (compatível com a do monorepo);
+- linha na tabela do `README.md` da raiz.
+
+Se ele precisa existir na máquina (binário, widget, atalho, autostart), o
+instalador acompanha — veja a regra de scripts e instalador.
+
+## Segredos
+
+Nunca versione `local.properties`, keystore/`.jks`, `.env`, banco `*.db` nem
+token. Use placeholder na documentação e mantenha o valor fora do repositório.
+Não contorne o `.gitignore` com `-f`.

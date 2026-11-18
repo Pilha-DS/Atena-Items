@@ -221,6 +221,14 @@
             android:parentActivityName=".activities.SettingsActivity" />
 
         <activity
+            android:name=".activities.QuickTimersActivity"
+            android:configChanges="orientation"
+            android:exported="false"
+            android:label="@string/quick_timers"
+            android:parentActivityName=".activities.MainActivity"
+            android:windowSoftInputMode="adjustResize" />
+
+        <activity
             android:name=".activities.SnoozeReminderActivity"
             android:configChanges="orientation"
             android:excludeFromRecents="true"
@@ -296,6 +304,10 @@
 
         <receiver
             android:name=".receivers.NotificationReceiver"
+            android:exported="false" />
+
+        <receiver
+            android:name=".receivers.QuickTimerReceiver"
             android:exported="false" />
 
         <receiver

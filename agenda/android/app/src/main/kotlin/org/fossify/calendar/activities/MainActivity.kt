@@ -364,6 +364,7 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
                 R.id.filter -> showFilterDialog()
                 R.id.refresh_caldav_calendars -> refreshCalDAVCalendars(true)
                 R.id.agenda_sync_now -> syncAgendaHub(showSyncingToast = true)
+                R.id.quick_timers -> launchQuickTimers()
                 R.id.manage_holidays -> manageHolidays()
                 R.id.add_birthdays -> tryAddBirthdays()
                 R.id.add_anniversaries -> tryAddAnniversaries()
@@ -1362,6 +1363,11 @@ class MainActivity : SimpleActivity(), RefreshRecyclerViewListener {
     private fun launchSettings() {
         hideKeyboard()
         startActivity(Intent(applicationContext, SettingsActivity::class.java))
+    }
+
+    private fun launchQuickTimers() {
+        hideKeyboard()
+        startActivity(Intent(applicationContext, QuickTimersActivity::class.java))
     }
 
     private fun launchAbout() {

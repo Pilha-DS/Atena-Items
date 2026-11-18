@@ -17,6 +17,7 @@ import org.fossify.calendar.extensions.recheckCalDAVCalendars
 import org.fossify.calendar.extensions.scheduleAllEvents
 import org.fossify.calendar.extensions.scheduleDummyAlarm
 import org.fossify.calendar.extensions.scheduleNextAutomaticBackup
+import org.fossify.calendar.helpers.QuickTimerAlarms
 import org.fossify.commons.extensions.notificationManager
 
 /**
@@ -33,6 +34,9 @@ class AppStartupWorker(
             scheduleDummyAlarm()
             scheduleNextAutomaticBackup()
             checkAndBackupEventsOnBoot()
+            // Quick timers keep their absolute deadline; re-arming here is what
+            // makes them survive a reboot or an app update.
+            QuickTimerAlarms.rescheduleAll(this)
         } catch (_: Throwable) {
             return Result.retry()
         }

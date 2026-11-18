@@ -29,6 +29,7 @@ class AgendaSyncException(
  * dependency, and one POST does not justify adding one. This class does no
  * database work and no threading; the engine owns both.
  */
+@Suppress("TooManyFunctions")
 class AgendaSyncClient {
 
     fun ping(url: String, token: String): Long {
@@ -46,6 +47,28 @@ class AgendaSyncClient {
         )
         return try {
             parseSyncResponse(body)
+        } catch (error: JSONException) {
+            throw AgendaSyncException(
+                AgendaSyncErrorKind.INVALID_RESPONSE,
+                "could not read the server response: ${error.message}",
+                error
+            )
+        }
+    }
+
+    fun syncTimers(
+        url: String,
+        token: String,
+        request: AgendaTimerSyncRequest
+    ): AgendaTimerSyncResponse {
+        val body = execute(
+            url = url,
+            token = token,
+            path = AGENDA_TIMERS_SYNC_PATH,
+            body = request.toJson()
+        )
+        return try {
+            parseTimerSyncResponse(body)
         } catch (error: JSONException) {
             throw AgendaSyncException(
                 AgendaSyncErrorKind.INVALID_RESPONSE,

@@ -71,6 +71,7 @@ import org.fossify.calendar.helpers.getPreviousAutoBackupTime
 import org.fossify.calendar.helpers.isWeekend
 import org.fossify.calendar.interfaces.CalendarsDao
 import org.fossify.calendar.interfaces.EventsDao
+import org.fossify.calendar.interfaces.QuickTimersDao
 import org.fossify.calendar.interfaces.TasksDao
 import org.fossify.calendar.interfaces.WidgetsDao
 import org.fossify.calendar.models.DayMonthly
@@ -138,6 +139,8 @@ val Context.widgetsDB: WidgetsDao
     get() = EventsDatabase.getInstance(applicationContext).WidgetsDao()
 val Context.completedTasksDB: TasksDao
     get() = EventsDatabase.getInstance(applicationContext).TasksDao()
+val Context.quickTimersDB: QuickTimersDao
+    get() = EventsDatabase.getInstance(applicationContext).QuickTimersDao()
 val Context.eventsHelper: EventsHelper get() = EventsHelper(this)
 val Context.calDAVHelper: CalDAVHelper get() = CalDAVHelper(this)
 

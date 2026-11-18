@@ -5,19 +5,19 @@ entre eles: só orquestram comandos que cada projeto já sabe rodar.
 
 | Script | Para quê |
 | --- | --- |
-| `install-linux.sh` | instala tudo no Arch + KDE Plasma 6 (apps, widgets, deps, hub) |
+| `install-kde-arch.sh` | instala tudo no Arch + KDE Plasma 6 (sync, apps, widgets, deps, hub) |
 | `android-release.sh` | builda APKs de release assinados com o cofre persistente |
 
-## `install-linux.sh`
+## `install-kde-arch.sh`
 
 Porta de entrada do monorepo numa máquina Arch Linux com KDE Plasma 6.
 
 ```bash
-./scripts/install-linux.sh              # notas + agenda + @Search
-./scripts/install-linux.sh --hub        # + Atena Hub (docker compose)
-./scripts/install-linux.sh --check      # confere ambiente e estado, não altera nada
-./scripts/install-linux.sh --only notes,search
-./scripts/install-linux.sh --uninstall  # remove (preserva dados)
+./scripts/install-kde-arch.sh              # sync + notas + agenda + docs + @Search
+./scripts/install-kde-arch.sh --hub        # + Atena Hub (docker compose)
+./scripts/install-kde-arch.sh --check      # confere ambiente e estado, não altera nada
+./scripts/install-kde-arch.sh --only sync,notes
+./scripts/install-kde-arch.sh --uninstall  # remove (preserva dados)
 ```
 
 | Etapa | O que faz |
@@ -25,9 +25,10 @@ Porta de entrada do monorepo numa máquina Arch Linux com KDE Plasma 6.
 | ambiente | exige Arch (ou `--force`) e detecta Plasma 6 |
 | dependências | `pacman -S --needed` só do que falta (`PACMAN_PKGS`) |
 | configuração | cria `~/.local/state/atena`, põe `~/.local/bin` no PATH via `~/.config/environment.d` |
-| apps | chama o `install.sh` de `notes/linux`, `agenda/linux` e do `@Search` |
+| sync | chama `atena-sync/install.sh` (daemon LAN em `127.0.0.1:18765`) |
+| apps | chama o `install.sh` de `jotter/linux-arch-kde`, `agenda/linux-arch-kde`, `docs/` e o `build-and-install.sh` do `@Search` (compila o fork) |
 | widgets | `kpackagetool6` registra os applets — aparecem em "Adicionar widgets", **nada entra no painel** |
-| hub | opcional: `docker compose up -d --build` + espera o `/health` |
+| hub | opcional: `docker compose up -d --build` + espera o `/health` (fallback internet) |
 | verificação | confere cada arquivo instalado e cada widget registrado |
 
 Detalhes que valem saber:
@@ -43,13 +44,25 @@ Detalhes que valem saber:
 - **O @Search aceita a pasta com outro nome.** `detect_search_dir` procura
   qualquer `search*` que tenha `scripts/install.sh`, porque o fork pode ser
   renomeado no disco.
+- **Busca por conteúdo do @Search precisa das ferramentas certas.** O `@Search`
+  chama `rg` (arquivos e texto), `pdftotext` (PDFs, tanto na busca por conteúdo
+  quanto nos PDFs anexados na barra de pesquisa) e `tesseract` (OCR de imagens)
+  em runtime; os pacotes `ripgrep`, `poppler`, `tesseract` e os dados de idioma
+  `tesseract-data-eng`/`-por` estão em `PACMAN_PKGS`, e a `verify` falha se
+  algum comando não existir.
+- **O Docs usa as mesmas ferramentas e um modelo local opcional.** O `@Docs`
+  lê o conteúdo com `pdftotext`/`tesseract` e, se houver Ollama em
+  `127.0.0.1:11434`, sugere etiquetas com o modelo; o Ollama **não** entra em
+  `PACMAN_PKGS` nem na `verify` — sem ele a sugestão cai para o texto e o app
+  continua funcionando. O `kdialog` está em `PACMAN_PKGS` só para o *Importar…*
+  abrir o seletor do Plasma; sem ele o app usa o diálogo do Java.
 
 ### Depois de mudar um projeto
 
 Se a mudança altera o que precisa existir na máquina (pacote, widget, atalho,
 autostart, binário em `~/.local`), atualize este script no mesmo commit — o
 checklist está em
-[`.cursor/rules/installer-sync.mdc`](../.cursor/rules/installer-sync.mdc).
+[`.cursor/rules/bash-installer.mdc`](../.cursor/rules/bash-installer.mdc).
 
 ## `android-release.sh`
 

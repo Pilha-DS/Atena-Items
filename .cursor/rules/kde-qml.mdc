@@ -1,0 +1,28 @@
+---
+description: QML e KDE Plasma 6 — apresentação, integração com o app, empacotamento e lint
+globs: **/*.qml,**/metadata.json
+alwaysApply: false
+---
+
+# QML e KDE Plasma 6
+
+- **QML é apresentação.** Lógica pesada, HTTP e parsing ficam no app. O widget
+  abre/recolhe e mostra estado. Mantenha a separação que o projeto já usa
+  (bridge/view host), sem ir e voltar entre QML e backend por duas linhas.
+- **Só API da versão de Plasma suportada.** Não use símbolo removido nem
+  componente de versão antiga; confira o que o projeto já importa.
+- **Não invente canal de comunicação.** Use o mecanismo de IPC/posicionamento
+  que o projeto já tem (arquivo de toggle, argumento, D-Bus publicado). Se o app
+  não publica, não invente.
+- Ícone e assets: use o caminho/empacotamento que o projeto já usa; não dependa
+  cegamente do tema de ícones quando o projeto empacota o próprio asset.
+- **`qmllint` da versão do Qt precisa passar** antes de instalar; erro de QML
+  aparece no painel só como "error loading". Rode o lint que o projeto define.
+- Instale/registre pelo **script do projeto** (ex.: `kpackagetool6` quando for
+  applet). Não copie arquivo manualmente para o diretório de pacotes: o widget
+  pode nem aparecer em "Adicionar widgets".
+- **Widget ≠ applet:** só o que declara a estrutura de applet é registrado como
+  widget. KWin script e tema têm caminho/registro próprios.
+- KWin script: acesse propriedade dentro de `try/catch` (varia por versão), case
+  por caption/classe do app e registre no `kwinrc` do jeito que o projeto já faz.
+- Mudança visual: confira claro **e** escuro e o estado sem dado.

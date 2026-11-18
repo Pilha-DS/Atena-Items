@@ -11,15 +11,18 @@ import org.fossify.calendar.R
 import org.fossify.calendar.extensions.config
 import org.fossify.calendar.helpers.Converters
 import org.fossify.calendar.helpers.LOCAL_CALENDAR_ID
+import org.fossify.calendar.interfaces.AgendaSyncDao
 import org.fossify.calendar.interfaces.CalendarsDao
 import org.fossify.calendar.interfaces.EventsDao
+import org.fossify.calendar.interfaces.QuickTimersDao
 import org.fossify.calendar.interfaces.TasksDao
 import org.fossify.calendar.interfaces.WidgetsDao
-import org.fossify.calendar.interfaces.AgendaSyncDao
 import org.fossify.calendar.models.AgendaSyncEvent
 import org.fossify.calendar.models.AgendaSyncTombstone
 import org.fossify.calendar.models.CalendarEntity
 import org.fossify.calendar.models.Event
+import org.fossify.calendar.models.QuickTimer
+import org.fossify.calendar.models.QuickTimerTombstone
 import org.fossify.calendar.models.Task
 import org.fossify.calendar.models.Widget
 import org.fossify.commons.extensions.getProperPrimaryColor
@@ -32,9 +35,11 @@ import java.util.concurrent.Executors
         Widget::class,
         Task::class,
         AgendaSyncEvent::class,
-        AgendaSyncTombstone::class
+        AgendaSyncTombstone::class,
+        QuickTimer::class,
+        QuickTimerTombstone::class
     ],
-    version = 12
+    version = 13
 )
 @TypeConverters(Converters::class)
 abstract class EventsDatabase : RoomDatabase() {
@@ -48,6 +53,8 @@ abstract class EventsDatabase : RoomDatabase() {
     abstract fun TasksDao(): TasksDao
 
     abstract fun AgendaSyncDao(): AgendaSyncDao
+
+    abstract fun QuickTimersDao(): QuickTimersDao
 
     companion object {
         private var db: EventsDatabase? = null
@@ -78,6 +85,7 @@ abstract class EventsDatabase : RoomDatabase() {
                             .addMigrations(MIGRATION_9_10)
                             .addMigrations(MIGRATION_10_11)
                             .addMigrations(MIGRATION_11_12)
+                            .addMigrations(MIGRATION_12_13)
                             .build()
                         db!!.openHelper.setWriteAheadLoggingEnabled(true)
                     }
@@ -217,6 +225,39 @@ abstract class EventsDatabase : RoomDatabase() {
                     )
                     execSQL(
                         "CREATE TABLE IF NOT EXISTS `agenda_sync_tombstones` (" +
+                            "`uuid` TEXT NOT NULL, " +
+                            "`deleted_at` INTEGER NOT NULL, " +
+                            "PRIMARY KEY(`uuid`))"
+                    )
+                }
+            }
+        }
+
+        /**
+         * Quick timers ("assuntos rápidos"). New tables only: events and the
+         * hub sync bookkeeping are left untouched.
+         */
+        @Suppress("MagicNumber")
+        private val MIGRATION_12_13 = object : Migration(12, 13) {
+            override fun migrate(database: SupportSQLiteDatabase) {
+                database.apply {
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `quick_timers` (" +
+                            "`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                            "`uuid` TEXT NOT NULL, " +
+                            "`title` TEXT NOT NULL, " +
+                            "`end_time` INTEGER NOT NULL, " +
+                            "`created_time` INTEGER NOT NULL, " +
+                            "`updated_time` INTEGER NOT NULL, " +
+                            "`needs_sync` INTEGER NOT NULL, " +
+                            "`notified` INTEGER NOT NULL)"
+                    )
+                    execSQL(
+                        "CREATE UNIQUE INDEX IF NOT EXISTS `index_quick_timers_uuid` " +
+                            "ON `quick_timers` (`uuid`)"
+                    )
+                    execSQL(
+                        "CREATE TABLE IF NOT EXISTS `quick_timer_tombstones` (" +
                             "`uuid` TEXT NOT NULL, " +
                             "`deleted_at` INTEGER NOT NULL, " +
                             "PRIMARY KEY(`uuid`))"

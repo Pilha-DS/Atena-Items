@@ -1,7 +1,49 @@
 ---
+description: Precedência e padrões — o guia de cada projeto/fork vence estas regras
 alwaysApply: true
 ---
 
-# Seguir padroes
+# Padrões e precedência
 
-Deve seguir padroes que ja existem no projeto. Cada projeto é um fork de outro projeto, sempre que for fazer melhoria deve seguir o padrao ja definido naquele projeto. E nao mudar os criadores.
+Estas regras são **globais e genéricas**. Elas são o piso, não o teto: o padrão
+de cada projeto/fork vence qualquer coisa escrita aqui.
+
+## Ordem de precedência
+
+Quando houver conflito, siga nesta ordem:
+
+1. **O guia do próprio projeto** — `AGENTS.md`, `CONTRIBUTING`, `README`,
+   configuração de lint/formatter e decisões registradas no repositório.
+2. **O código existente na área que você vai tocar** — nomes, camadas,
+   tratamento de erro, estilo. Imite o vizinho antes de inventar.
+3. **Estas regras globais** — só preenchem o que o projeto não define.
+4. **Sua preferência** — por último, nunca no lugar das anteriores.
+
+Regra prática: se o projeto faz de um jeito e esta regra diz outro, **faça do
+jeito do projeto** e, se necessário, explique no corpo do commit.
+
+## Forks de terceiros
+
+Vários projetos do monorepo são forks. Neles:
+
+- **Não mude criadores, créditos, copyright nem licença.** Mudança nossa é
+  incremento, não reescrita de autoria.
+- **Mudança pequena e concentrada.** O diff contra o upstream precisa continuar
+  legível e fácil de sincronizar. Não reorganize, renomeie nem reformate o que
+  não precisa.
+- **Não edite código vendorizado** para resolver bug nosso; se for inevitável,
+  registre o motivo no commit.
+- **Estilo do upstream primeiro.** O guia do fork (ex.: `AGENTS.md`,
+  `CONTRIBUTING`) vence estas regras em tudo que for específico da linguagem ou
+  do framework dele.
+- **Sincronização com o upstream é commit próprio**, com a versão de origem no
+  corpo.
+
+## Descobrir em vez de adivinhar
+
+- Nomes de pastas, scripts, funções e comandos mudam. **Confira no projeto**
+  (README, guia do fork, `Makefile`, build, `--help`) antes de usar um nome que
+  viu numa regra, num comentário antigo ou no histórico.
+- Na dúvida entre criar um padrão novo e reutilizar o existente, **reutilize**.
+  Componente/helper novo só quando o existente não serve, e com motivo.
+- Nada de "limpeza" ou refactor de arquivo inteiro no meio de uma feature.

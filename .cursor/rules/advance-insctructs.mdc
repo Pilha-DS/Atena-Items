@@ -1,0 +1,15 @@
+---
+alwaysApply: true
+---
+
+# Desenvolvimento
+
+**instalacao:** Para evitar perda de tempo, sempre instale as mudancas que foram desenvolvida, isso se for possivel instalar no ambiente atual, por exemplo se estiver no linux, instale.
+
+**Arquivos instaladores:** Tem arquivos de instalacao automatizados, sempre deixe os arquivos de instalacao atualizados e funcionais para os usuarios. Sempre faca os moodulos subirem em portas estrenhas, para evitar conflitos com portas comuns.
+
+**Git commits:** Quando for fazer commit, faca commits explicativos e com comentarios bons. So faca commit se fizer sentido, como em atualizacoes relevantes, ajuste de bugs. Para evitar problemas com milhares de commits se a att nao for relevante evite, espere juntar uma quantidade media de mudancas.
+
+**Git remoto:** Nunca faca push, merge, pull request, isso é trabalho do usuario, serve para evitar problemas de organiazacao.
+
+**Git destrutivos:** Nao faca, comandos que exclua commits, tire mudancas e etc, ou seja, nao faca comandos que sejam destrutivos sem concentimento do usuario operador.

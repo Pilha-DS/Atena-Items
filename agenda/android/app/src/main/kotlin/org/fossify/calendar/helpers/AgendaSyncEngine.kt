@@ -13,9 +13,11 @@ import org.fossify.calendar.extensions.scheduleNextEventReminder
 import org.fossify.calendar.extensions.updateWidgets
 import org.fossify.calendar.interfaces.AgendaSyncDao
 import org.fossify.calendar.interfaces.EventsDao
+import org.fossify.calendar.interfaces.QuickTimersDao
 import org.fossify.calendar.models.AgendaSyncEvent
 import org.fossify.calendar.models.AgendaSyncTombstone
 import org.fossify.calendar.models.Event
+import org.fossify.calendar.models.QuickTimer
 import java.util.UUID
 
 data class AgendaSyncResult(
@@ -41,6 +43,7 @@ data class AgendaSyncResult(
  * account or an imported file have their own sync, and repeating events have
  * no representation on the hub (the recurrence would be silently lost).
  */
+@Suppress("TooManyFunctions")
 object AgendaSyncEngine {
     private const val TAG = "AgendaSync"
 
@@ -87,17 +90,41 @@ object AgendaSyncEngine {
                 config.agendaSyncCursor = response.cursor
                 config.agendaSyncLastAt = System.currentTimeMillis()
 
+                // Quick timers are a stream of their own, with their own cursor.
+                val timerOutgoing = database.withTransaction { collectTimerOutgoing(database) }
+                val timerResponse = client.syncTimers(
+                    url = config.agendaSyncUrl,
+                    token = config.agendaSyncToken,
+                    request = AgendaTimerSyncRequest(
+                        cursor = config.agendaTimerCursor,
+                        deviceId = config.agendaSyncDeviceId,
+                        deviceName = config.agendaSyncDeviceName,
+                        timers = timerOutgoing.timers,
+                        deletions = timerOutgoing.deletions
+                    )
+                )
+                val timerApplied = database.withTransaction {
+                    applyTimerResponse(database, timerResponse, timerOutgoing)
+                }
+                timerApplied.ringable.forEach { QuickTimerAlarms.schedule(appContext, it) }
+                timerApplied.deleted.forEach { QuickTimerAlarms.cancel(appContext, it) }
+                config.agendaTimerCursor = timerResponse.cursor
+
                 Log.i(
                     TAG,
                     "sync ok: pushed ${outgoing.events.size}/${outgoing.deletions.size} " +
                         "pulled ${response.events.size}/${response.deletions.size} " +
-                        "cursor=${response.cursor}"
+                        "timers ${timerOutgoing.timers.size}/${timerOutgoing.deletions.size} " +
+                        "-> ${timerResponse.timers.size}/${timerResponse.deletions.size} " +
+                        "cursor=${response.cursor} timerCursor=${timerResponse.cursor}"
                 )
                 AgendaSyncResult(
                     configured = true,
                     ok = true,
-                    pushed = outgoing.events.size + outgoing.deletions.size,
-                    pulled = response.events.size + response.deletions.size,
+                    pushed = outgoing.events.size + outgoing.deletions.size +
+                        timerOutgoing.timers.size + timerOutgoing.deletions.size,
+                    pulled = response.events.size + response.deletions.size +
+                        timerResponse.timers.size + timerResponse.deletions.size,
                     cursor = response.cursor
                 )
             } catch (error: AgendaSyncException) {
@@ -348,6 +375,160 @@ object AgendaSyncEngine {
         }
     }
 
+    // ---------------------------------------------------------------------
+    // Quick timers ("assuntos rápidos")
+    // ---------------------------------------------------------------------
+
+    private fun collectTimerOutgoing(database: EventsDatabase): TimerOutgoing {
+        val dao = database.QuickTimersDao()
+        val pending = dao.getPending()
+        val tombstones = dao.getTombstones()
+        return TimerOutgoing(
+            timers = pending.map {
+                AgendaTimerDto(
+                    uuid = it.uuid,
+                    title = it.title,
+                    endTime = it.endTime,
+                    createdTime = it.createdTime,
+                    updatedTime = it.updatedTime
+                )
+            },
+            deletions = tombstones.map { AgendaTimerDeletionDto(it.uuid, it.deletedAt) },
+            pushed = pending.map { it.uuid to it.updatedTime }
+        )
+    }
+
+    /**
+     * Applies the timer pull and acknowledges the push. Same last-write-wins
+     * rule as the events: the newer `updatedTime` wins, and a deletion only
+     * removes a timer that was not edited after it.
+     *
+     * The deadlines that have to ring are returned, so the caller re-arms the
+     * alarms outside the transaction.
+     */
+    private fun applyTimerResponse(
+        database: EventsDatabase,
+        response: AgendaTimerSyncResponse,
+        outgoing: TimerOutgoing
+    ): TimerApplied {
+        val dao = database.QuickTimersDao()
+        val serverVersions = HashMap<String, Long>()
+        val ringable = ArrayList<QuickTimer>()
+        val deleted = ArrayList<String>()
+
+        for (dto in response.timers) {
+            if (dto.uuid.isEmpty() || dto.endTime <= 0L) {
+                continue
+            }
+            serverVersions[dto.uuid] = dto.updatedTime
+            applyPulledTimer(dao, dto)?.let { ringable.add(it) }
+        }
+
+        for (deletion in response.deletions) {
+            if (deletion.uuid.isNotEmpty() && applyPulledTimerDeletion(dao, deletion)) {
+                deleted.add(deletion.uuid)
+            }
+        }
+
+        acknowledgeTimerPushes(outgoing, serverVersions, dao)
+        return TimerApplied(ringable = ringable, deleted = deleted)
+    }
+
+    /** Returns the timer when its alarm has to be re-armed. */
+    private fun applyPulledTimer(dao: QuickTimersDao, dto: AgendaTimerDto): QuickTimer? {
+        val local = dao.getByUuid(dto.uuid)
+        if (local == null) {
+            return insertPulledTimer(dao, dto)
+        }
+
+        // Local is the same version or newer: it stays dirty and wins the next
+        // push, but the server version is known now.
+        if (dto.updatedTime <= local.updatedTime) {
+            return null
+        }
+
+        val createdTime = minOf(dto.createdTime, local.createdTime)
+        if (dto.endTime == local.endTime) {
+            dao.applyPulledRename(
+                uuid = dto.uuid,
+                title = dto.title,
+                createdTime = createdTime,
+                updatedTime = dto.updatedTime
+            )
+            return null
+        }
+
+        // A new deadline is a new countdown: it has to ring again.
+        dao.applyPulledEdit(
+            uuid = dto.uuid,
+            title = dto.title,
+            endTime = dto.endTime,
+            createdTime = createdTime,
+            updatedTime = dto.updatedTime
+        )
+        return local.copy(
+            title = dto.title,
+            endTime = dto.endTime,
+            createdTime = createdTime,
+            updatedTime = dto.updatedTime,
+            needsSync = false,
+            notified = false
+        )
+    }
+
+    private fun insertPulledTimer(dao: QuickTimersDao, dto: AgendaTimerDto): QuickTimer? {
+        val tombstone = dao.getTombstone(dto.uuid)
+        // Deleted here after this version was written: the deletion wins.
+        if (tombstone != null && tombstone.deletedAt >= dto.updatedTime) {
+            return null
+        }
+        if (tombstone != null) {
+            dao.deleteTombstone(dto.uuid)
+        }
+
+        val fresh = QuickTimer(
+            uuid = dto.uuid,
+            title = dto.title,
+            endTime = dto.endTime,
+            createdTime = dto.createdTime,
+            updatedTime = dto.updatedTime,
+            needsSync = false,
+            notified = false
+        )
+        dao.insert(fresh)
+        return fresh
+    }
+
+    private fun applyPulledTimerDeletion(
+        dao: QuickTimersDao,
+        deletion: AgendaTimerDeletionDto
+    ): Boolean {
+        val local = dao.getByUuid(deletion.uuid) ?: return false
+        // An edit made after the deletion is newer, so it comes back on the
+        // next push.
+        if (deletion.deletedAt < local.updatedTime) {
+            return false
+        }
+        dao.deleteByUuid(deletion.uuid)
+        return true
+    }
+
+    private fun acknowledgeTimerPushes(
+        outgoing: TimerOutgoing,
+        serverVersions: Map<String, Long>,
+        dao: QuickTimersDao
+    ) {
+        val confirmed = outgoing.pushed.mapNotNull { (uuid, localVersion) ->
+            if ((serverVersions[uuid] ?: -1L) <= localVersion) uuid else null
+        }
+        if (confirmed.isNotEmpty()) {
+            dao.markSynced(confirmed)
+        }
+        if (outgoing.deletions.isNotEmpty()) {
+            dao.deleteTombstones(outgoing.deletions.map { it.uuid })
+        }
+    }
+
     private fun Event.isSyncable(): Boolean = type == TYPE_EVENT &&
         parentId == 0L &&
         repeatInterval == 0 &&
@@ -371,5 +552,16 @@ object AgendaSyncEngine {
     private data class Applied(
         val touched: Boolean,
         val updatedEvents: List<Event>
+    )
+
+    private data class TimerOutgoing(
+        val timers: List<AgendaTimerDto>,
+        val deletions: List<AgendaTimerDeletionDto>,
+        val pushed: List<Pair<String, Long>>
+    )
+
+    private data class TimerApplied(
+        val ringable: List<QuickTimer>,
+        val deleted: List<String>
     )
 }

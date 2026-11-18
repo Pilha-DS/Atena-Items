@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Desvio do System Settings para a janela do Atena. Instalado por kde/install.sh
+# em ~/.local/bin/systemsettings; apague com `./install.sh --drop-override` ou
+# `./install.sh --uninstall`.
+#
+# Existe porque uma tela do Plasma abre outra chamando `systemsettings <kcm_id>`
+# num processo novo — kcm_animations faz isso em "Mais opções de efeitos", que
+# apontava para o System Settings antigo. Com este arquivo antes de /usr/bin no
+# PATH, o processo filho cai na janela nova, na tela pedida.
+#
+# Opções do binário original (--list, --help, …) não são traduzidas: elas vão
+# para o binário de verdade, para nada que dependa dele quebrar.
+set -euo pipefail
+
+real=/usr/bin/systemsettings
+
+for arg in "$@"; do
+    case "$arg" in
+        -*) exec "$real" "$@" ;;
+    esac
+done
+
+# Sem a janela nova instalada (ou fora do PATH) o desvio não tem para onde ir.
+if ! command -v atena-settings >/dev/null 2>&1; then
+    exec "$real" "$@"
+fi
+
+exec atena-settings "$@"

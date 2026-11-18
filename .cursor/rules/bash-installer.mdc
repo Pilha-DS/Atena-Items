@@ -1,0 +1,60 @@
+---
+description: Scripts bash e instalador — segurança, idempotência, uninstall e sincronia com o que a mudança exige
+alwaysApply: true
+---
+
+# Scripts e instalador
+
+## Bash
+
+- Cabeçalho `#!/usr/bin/env bash` e `set -euo pipefail` na primeira linha útil.
+- Variáveis entre aspas (`"$dir"`), `[[ … ]]`, `local` dentro de função, `$(…)`
+  em vez de crases.
+- **Nada de root** fora do inevitável (gerenciador de pacote, `modprobe`,
+  `setcap`, grupo). Root fica isolado, com mensagem antes e listado no resumo —
+  nunca `sudo` escondido.
+- Instalador escreve em `~/.local`, `~/.config`, `~/.local/share` e respeita
+  `XDG_*`.
+- **Idempotente:** rodar duas vezes não duplica entrada em `.desktop`, PATH,
+  autostart nem registro de widget.
+- **Todo instalador tem `uninstall`** que remove o que criou e **preserva dado
+  do usuário** (config, banco, histórico). Apagar dado só com flag explícita.
+- Cheque ferramenta opcional antes de usar (`command -v …`) e tenha fallback;
+  requisito ausente falha com mensagem clara e código ≠ 0.
+- `mktemp` + `trap` para temporário; não escreva no diretório do projeto durante
+  a instalação.
+- Nunca ecoe token, senha ou chave (nem com `set -x`).
+- Antes de encerrar: `bash -n script.sh` (e `shellcheck` se existir).
+
+## O instalador acompanha a mudança
+
+O script de instalação do monorepo é a porta de entrada na máquina. Toda mudança
+que altere **o que precisa existir** tem que ser refletida nele **no mesmo
+commit** — senão a instalação limpa quebra numa máquina nova.
+
+Os nomes de função/variável mudam; **descubra o nome real no script** e procure a
+categoria da sua mudança:
+
+| Mudança | O que atualizar no instalador |
+| --- | --- |
+| pacote/dependência do sistema | lista de pacotes + instalação de dependência |
+| projeto/app novo | função de instalação, opção `--only`, `uninstall` e verificação |
+| arquivo novo em `~/.config`, `~/.local/bin`, `~/.local/opt` | verificação e remoção |
+| widget/plasmoid | registro só se for applet; conferir no `--check` |
+| atalho global | entrada `.desktop` com atalho + verificação |
+| autostart / processo em segundo plano | `.desktop` de autostart + verificação |
+| binário que precisa de root | lista de pendências de root, nunca `sudo` escondido |
+| serviço/porta | subir o serviço + checagem de health |
+| pasta de projeto renomeada | detecção de caminho e derivados |
+| `install.sh` de um projeto | `--only <projeto>` continua idempotente |
+
+Regras de manutenção:
+
+- **Um instalador por projeto.** O geral orquestra; não reimplemente build,
+  cópia de arquivo nem geração de `.desktop` que o projeto já faz.
+- **Uninstall acompanha o install.**
+- **Sem `cond && comando`** quando a condição pode ser falsa com `set -e` ativo —
+  use `if`.
+- Antes de encerrar: `bash -n` no script, `--check` e o `--only` do projeto que
+  você mexeu.
+- Atualize também a tabela do README da raiz e do README de `scripts/`.

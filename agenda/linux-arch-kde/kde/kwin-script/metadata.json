@@ -1,0 +1,18 @@
+{
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Open Apps Labs"
+            }
+        ],
+        "Description": "Mantém a janela da Agenda fora da barra de tarefas, do paginador e do alternador de janelas, como um widget",
+        "Icon": "agenda",
+        "Id": "agenda-widget",
+        "License": "GPL-3.0-or-later",
+        "Name": "Agenda Widget",
+        "Version": "1.0.0"
+    },
+    "KPackageStructure": "KWin/Script",
+    "X-Plasma-API": "javascript",
+    "X-Plasma-MainScript": "code/main.js"
+}

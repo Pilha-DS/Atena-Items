@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+#
+# Helper used by the .desktop launcher and, later, by the Plasma widget.
+#
+#   docs-toggle            show/hide the running window, or start the app
+#
+set -euo pipefail
+
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/docs"
+APP_BIN="${DOCS_BIN:-$HOME/.local/opt/docs/bin/docs}"
+
+# The app publishes the directory it actually uses; fall back to the same
+# rules the app applies when there is no running instance yet.
+ipc_dir() {
+    local published=""
+    if [[ -f "$CONFIG_DIR/ipc-dir" ]]; then
+        published="$(head -n 1 "$CONFIG_DIR/ipc-dir" 2>/dev/null || true)"
+    fi
+    if [[ -n "$published" && -d "$published" ]]; then
+        printf '%s\n' "$published"
+        return
+    fi
+    if [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" && -w "$XDG_RUNTIME_DIR" ]]; then
+        printf '%s\n' "$XDG_RUNTIME_DIR/docs"
+        return
+    fi
+    printf '%s\n' "${XDG_CACHE_HOME:-$HOME/.cache}/docs/run"
+}
+
+# Matches both the installed app image (process name `docs`) and a development
+# run (`java ... com.openappslabs.docs.MainKt`).
+is_running() {
+    pgrep -x docs >/dev/null 2>&1 && return 0
+    pgrep -f "com\.openappslabs\.docs\.MainKt" 2>/dev/null \
+        | grep -vqx -- "$$" >/dev/null 2>&1 && return 0
+    return 1
+}
+
+DIR="$(ipc_dir)"
+mkdir -p "$DIR"
+
+if is_running; then
+    # The running instance watches this file and flips its visibility.
+    printf '%s\n' "$(date +%s%N)" > "$DIR/docs.toggle"
+    exit 0
+fi
+
+if [[ ! -x "$APP_BIN" ]]; then
+    APP_BIN="$(command -v docs || true)"
+fi
+
+if [[ -z "$APP_BIN" ]] || [[ ! -x "$APP_BIN" ]]; then
+    echo "docs-toggle: Docs is not installed (expected at \$HOME/.local/opt/docs/bin/docs)" >&2
+    exit 1
+fi
+
+setsid nohup "$APP_BIN" >/dev/null 2>&1 &

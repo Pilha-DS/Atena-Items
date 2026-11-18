@@ -7,23 +7,29 @@ qualquer um deles sem tocar nos outros.
 | Pasta | Projeto | O que é | Stack |
 | --- | --- | --- | --- |
 | [`agenda/`](agenda) | **Agenda** | Calendário (fork do [Fossify Calendar](https://github.com/FossifyOrg/Calendar)) com port Linux e widget do KDE | Kotlin, Jetpack Compose, Compose Desktop |
-| [`notes/`](notes) | **Atena Notes** | App de notas offline-first (Android + port Linux com widget do KDE) | Kotlin, Jetpack Compose, Room, Compose Desktop |
-| [`server/`](server) | **Atena Hub** | Servidor de sincronização das notas + armazenamento universal (registros e arquivos) para apps novos + tela de admin (`/admin`) | Kotlin, Ktor, SQLite, Docker |
-| [`search/`](search) | **@Search** | Launcher de desktop (fork do [Vicinae](https://vicinae.com)) | C++23, Qt 6, QML |
+| [`jotter/`](jotter) | **Jotter / Atena Notes** | App de notas offline-first (Android + port Linux com widget do KDE) | Kotlin, Jetpack Compose, Room, Compose Desktop |
+| [`docs/`](docs) | **Docs** | Biblioteca de documentos sobre a árvore real de arquivos — busca no nome e no conteúdo (OCR), etiquetas hierárquicas, recentes, favoritos e pastas (inclusive as vazias), importar arquivos do PC para o `init`, criar pastas e subpastas pela janela, pasta sugerida por IA (Ollama local ou DeepSeek; o movimento só acontece com confirmação) e a caixa de entrada `init/`, sempre criada e recriada, onde a IA sugere pasta e etiqueta e cria só o que você confirmar | Kotlin, Compose Desktop, Room |
+| [`atena-sync/`](atena-sync) | **Atena Sync** | Daemon local: ranking de conexões, sync LAN (mDNS) e fallback para o hub; apps falam em `127.0.0.1:18765` | Kotlin, Ktor, SQLite |
+| [`atena-hub/`](atena-hub) | **Atena Hub** | Fallback de internet: sync das notas + armazenamento universal + admin (`/admin`) | Kotlin, Ktor, SQLite, Docker |
+| [`vicinae/`](vicinae) | **@Search** | Launcher de desktop (fork do [Vicinae](https://vicinae.com)) | C++23, Qt 6, QML |
+| [`kde/`](kde) | **Atena KDE** | Ajustes versionados do Plasma/Dolphin (esquema de cores AtenaDark) e janela de configurações instalável | Bash, config do KDE, C++/Qt 6 |
 
-Os projetos se conversam por HTTP: o **Atena Hub** é o ponto de encontro. O app
-de notas sincroniza com ele e qualquer outra ferramenta lê as notas por
-`/api/v1/tools/jotter/notes` em vez de abrir o banco do app.
+Os apps são **local-first**. O ponto preferencial de sync é o **Atena Sync**
+(LAN entre aparelhos); o **Atena Hub** fica como fallback de internet. Outras
+ferramentas podem ler notas por `/api/v1/tools/jotter/notes` no hub.
 
 ```
 agenda/
 ├── android/                # app Android (fork do Fossify, Gradle próprio)
-└── linux/                  # port desktop + widget Plasma 6 (Gradle próprio)
-notes/
+└── linux-arch-kde/         # port desktop + widget Plasma 6 (Gradle próprio)
+jotter/
 ├── Android/                # app Android (Gradle próprio)
-└── linux/                  # port desktop + widget Plasma 6 (Gradle próprio)
-server/                     # Atena Hub (Gradle próprio + Docker)
-search/                     # fork do Vicinae, build CMake/Ninja
+└── linux-arch-kde/         # port desktop + widget Plasma 6 (Gradle próprio)
+docs/                       # biblioteca de documentos (Gradle próprio)
+atena-sync/                 # daemon local LAN + fallback hub
+atena-hub/                  # hub de internet (Gradle + Docker)
+vicinae/                    # fork do Vicinae, build CMake/Ninja
+kde/                        # configs do Plasma/Dolphin + janela de configurações
 scripts/                    # instalador Linux e assinatura dos APKs
 LICENSE                     # GNU GPL v3.0
 ```
@@ -33,11 +39,15 @@ LICENSE                     # GNU GPL v3.0
 | Projeto | Para buildar |
 | --- | --- |
 | `agenda/android` | JDK 17+ (recomendado 21), Android SDK API 36 |
-| `agenda/linux` | JDK 21, KDE Plasma 6 (só para o widget) |
-| `notes/Android` | JDK 17+ (recomendado 21), Android SDK API 36 |
-| `notes/linux` | JDK 21, KDE Plasma 6 + KWin (só para o widget) |
+| `agenda/linux-arch-kde` | JDK 21, KDE Plasma 6 (só para o widget) |
+| `jotter/Android` | JDK 17+ (recomendado 21), Android SDK API 36 |
+| `jotter/linux-arch-kde` | JDK 21, KDE Plasma 6 + KWin (só para o widget) |
+| `atena-sync` | JDK 21 |
+| `atena-sync/android` | JDK 17+, Android SDK API 35 |
+| `docs` | JDK 21, KDE Plasma 6 (só para o tema seguir a paleta); `kdialog` é opcional e dá o seletor de arquivos nativo do KDE |
 | `server` | JDK 21 **ou** Docker + Docker Compose |
-| `search` | Qt 6, CMake, Ninja, C++23 — ou use o binário oficial pré-compilado |
+| `search` | Qt 6, CMake, Ninja, `wayland-protocols`, C++23 (o fork é compilado do código) |
+| `kde` | Bash (configs do KDE); Qt 6 + KF6 + CMake/Ninja para a janela de configurações |
 
 Os projetos Gradle trazem o Wrapper (`./gradlew`), então não é preciso instalar
 o Gradle.
@@ -48,27 +58,47 @@ Um comando instala tudo na máquina — apps, lançadores, autostart e os widget
 Plasma:
 
 ```bash
-./scripts/install-linux.sh              # notas + agenda + @Search
-./scripts/install-linux.sh --hub        # inclui o Atena Hub (docker compose)
-./scripts/install-linux.sh --check      # confere o ambiente, não instala nada
-./scripts/install-linux.sh --only notes
-./scripts/install-linux.sh --uninstall  # remove (preserva seus dados)
+./scripts/install-kde-arch.sh              # sync + notas + agenda + @Search
+./scripts/install-kde-arch.sh --hub        # inclui o Atena Hub (docker compose)
+./scripts/install-kde-arch.sh --check      # confere o ambiente, não instala nada
+./scripts/install-kde-arch.sh --only sync
+./scripts/install-kde-arch.sh --only notes
+./scripts/install-kde-arch.sh --only docs
+./scripts/install-kde-arch.sh --uninstall  # remove (preserva seus dados)
 ```
 
 Ele confere distro e Plasma, instala via `pacman` só o que falta (JDK 21, docker,
-`jq`, `qt6-tools`…), garante `~/.local/bin` no PATH da sessão gráfica, chama o
-`install.sh` de cada projeto, **registra os widgets sem colocar nada no painel** e
-verifica o resultado artefato por artefato.
+toolchain e libs Qt do `@Search`, `qt6-tools`…), garante `~/.local/bin` no PATH
+da sessão gráfica, chama o `install.sh` de cada projeto, **registra os widgets sem
+colocar nada no painel** e verifica o resultado artefato por artefato.
 
-Depois de instalar: **Super+N** abre o Notes, **Super+C** abre a Agenda, e os
-widgets aparecem em *botão direito no painel → Adicionar widgets…*.
+O `@Search` é compilado do nosso fork (`search*/scripts/build-and-install.sh`),
+não baixado do release oficial — senão as mudanças do fork nunca chegariam na
+máquina instalada.
+
+A busca do `@Search` é por níveis: primeiro **apps/comandos**, depois **arquivos**
+pelo índice, que tem **5 s** para responder. Só quando nenhum arquivo é achado ele
+cai para **palavras-chave em texto e PDFs** (`rg`, `pdftotext`) e, por fim,
+**palavras-chave em imagens** (OCR com `tesseract`) — os dois níveis juntos têm no
+máximo **10 s**. As palavras-chave só começam depois que você para de digitar,
+fechar a janela ou trocar o texto cancela o nível em andamento, e os resultados
+aparecem conforme chegam.
+
+Na barra de busca dá para **arrastar ou colar imagens, PDFs e arquivos de texto**:
+eles aparecem abaixo da consulta e seguem **junto com o texto** para a IA quando
+você aperta **Tab** (Ask AI). O PDF é convertido em texto com o `pdftotext`, então
+até modelos sem visão conseguem ler o conteúdo.
+
+Depois de instalar: **Super+N** abre o Notes, **Super+C** abre a Agenda,
+**Super+Shift+D** abre o Docs, e os widgets aparecem em *botão direito no
+painel → Adicionar widgets…*.
 
 O que precisa de root (uinput/`setcap` para colar e snippets no `@Search`, grupo
 `docker`) é listado no fim como pendência explícita — o script não roda `sudo`
 escondido.
 
 > Mudou o que um projeto instala ou exige? A regra
-> [`.cursor/rules/installer-sync.mdc`](.cursor/rules/installer-sync.mdc) tem o
+> [`.cursor/rules/bash-installer.mdc`](.cursor/rules/bash-installer.mdc) tem o
 > checklist do que atualizar no instalador.
 
 ## Começando
@@ -78,23 +108,32 @@ escondido.
 cd agenda/android && ./gradlew :app:assembleDebug
 
 # agenda — desktop Linux (+ widget do painel)
-cd agenda/linux && ./gradlew :app:run
+cd agenda/linux-arch-kde && ./gradlew :app:run
 
 # notas — Android
-cd notes/Android && ./gradlew :app:assembleDebug
+cd jotter/Android && ./gradlew :app:assembleDebug
 
 # notas — desktop Linux (+ widget do painel)
-cd notes/linux && ./gradlew :app:run
+cd jotter/linux-arch-kde && ./gradlew :app:run
 
-# servidor
-cd server && docker compose up -d --build
+# docs — desktop Linux
+cd docs && ./gradlew :app:run
+
+# sync local (LAN)
+cd atena-sync && ./install.sh
+
+# hub (fallback internet)
+cd atena-hub && docker compose up -d --build
 
 # launcher
 cd search && make release
+
+# ajustes do KDE (esquema de cores + Dolphin) e janela de configurações
+cd kde && ./install.sh --diff
 ```
 
-Cada pasta tem um README com os detalhes: [`agenda/`](agenda), [`notes/`](notes),
-[`server/`](server), [`search/`](search).
+Cada pasta tem um README com os detalhes: [`agenda/`](agenda), [`jotter/`](jotter),
+[`atena-sync/`](atena-sync), [`atena-hub/`](atena-hub), [`vicinae/`](vicinae).
 
 ## 📦 APK de release (atualização por cima)
 
@@ -121,16 +160,14 @@ agente de IA e servem de guia para humanos:
 
 | Rule | Vale para |
 | --- | --- |
-| `project-structure` | sempre — layout do monorepo, fronteiras e comandos de build |
-| `git-commits` | sempre — Conventional Commits, escopos e o que não commitar |
-| `kotlin-style` | `notes/**`, `server/**` — imutabilidade, erros, corrotinas |
-| `compose-ui` | `notes/**/ui/` — estado, i18n, tema e acessibilidade |
-| `hub-server` | `server/` — auth, acesso ao banco, compatibilidade do sync |
-| `gradle-deps` | builds — versões só no catálogo, bump isolado |
-| `shell-scripts` | `*.sh` — `set -euo pipefail`, instalação em `~/.local`, uninstall |
-| `kde-integration` | QML/plasmoid — Plasma 6, `qmllint`, `kpackagetool6` |
-| `docs-writing` | `*.md` — README em pt-BR, tabelas de config e API |
-| `search-upstream` | `search/` — fork do Vicinae, `AGENTS.md` vence |
+| `patterns` | sempre — precedência: o guia de cada projeto/fork vence estas regras |
+| `project-structure` | sempre — fronteiras do monorepo, build e o que não versionar |
+| `git-docs` | sempre — commits e documentação |
+| `kotlin-compose` | Kotlin — estilo, erros, corrotinas, estado de UI |
+| `gradle-deps` | builds Gradle — versões só no catálogo, bump isolado |
+| `server-backend` | servidor — auth, banco, contrato e operação |
+| `kde-qml` | QML/Plasma 6 — apresentação, empacotamento e lint |
+| `bash-installer` | scripts e instalador — bash seguro, idempotência e sync |
 
 O [`.editorconfig`](.editorconfig) fixa o básico de formatação (UTF-8, LF, 4
 espaços em Kotlin/QML, 2 em JSON/YAML).

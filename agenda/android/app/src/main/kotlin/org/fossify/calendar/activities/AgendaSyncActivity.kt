@@ -67,10 +67,11 @@ class AgendaSyncActivity : SimpleActivity() {
             // A different hub has its own cursor and knows nothing about the
             // versions acknowledged by the previous one.
             config.agendaSyncCursor = 0L
+            config.agendaTimerCursor = 0L
             ensureBackgroundThread {
-                EventsDatabase.getInstance(applicationContext)
-                    .AgendaSyncDao()
-                    .resetAllSyncedTimes()
+                val database = EventsDatabase.getInstance(applicationContext)
+                database.AgendaSyncDao().resetAllSyncedTimes()
+                database.QuickTimersDao().resetAllPending()
             }
         }
 
@@ -147,9 +148,9 @@ class AgendaSyncActivity : SimpleActivity() {
             AgendaSyncWorker.cancelPeriodic(this)
             AgendaSyncWorker.cancelPending(this)
             ensureBackgroundThread {
-                EventsDatabase.getInstance(applicationContext)
-                    .AgendaSyncDao()
-                    .resetAllSyncedTimes()
+                val database = EventsDatabase.getInstance(applicationContext)
+                database.AgendaSyncDao().resetAllSyncedTimes()
+                database.QuickTimersDao().resetAllPending()
             }
             binding.agendaSyncUrl.setText("")
             binding.agendaSyncToken.setText("")

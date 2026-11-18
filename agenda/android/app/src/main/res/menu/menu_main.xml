@@ -54,6 +54,11 @@
         android:title="@string/add_anniversaries"
         app:showAsAction="never" />
     <item
+        android:id="@+id/quick_timers"
+        android:icon="@drawable/ic_clock_outline_vector"
+        android:title="@string/quick_timer_menu"
+        app:showAsAction="never" />
+    <item
         android:id="@+id/settings"
         android:icon="@drawable/ic_settings_cog_vector"
         android:title="@string/settings"

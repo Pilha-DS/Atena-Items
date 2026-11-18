@@ -1,0 +1,25 @@
+---
+alwaysApply: true
+---
+
+# Forks
+
+**Creditos originais:** Hoje quase todos nossos modulos, são forks de outros projetos. Dito isso nao modifique creditos dos criadores originais, Sempre no final do readme dele, veja se esta com os creditos, e se esta apontando para o projeto original.
+
+# Desenvolvimento
+
+**Desenvolvimento agil:** Deve-se usar o sistema de "minimal possible" onde fazemos o minimo para chegar ao resultado. Caso isso nao comprometa a seguranca, se o minimo for nao seguro deve ser feito o seguro e estavel.
+
+**Teste do user:** Os testes devem ser feitos pelo user nao pela IA entao sempre que construir algo fale oque mudou, e nao faca teste complexos, somente testes simples para ver se esta coerente.
+
+**Nunca suponha algo:** Se tiver duvidas ou meias verdades sobre o pedido que o usuario fez, sempre pergunte ao usuario sobre para tirar as duvidas.
+
+**Padroes de desenvolvimento:** Por usamos muitos forks, a maioria dos projetos ja tem um padrao de desenvolvimento proprio, dito isso, nao crie padroes por ser mais conhecido no mercado, sempre use os existentes a risca.
+
+**Estrutura do projeto:** Todos os projetos possuem estruturas proprias. Siga elas para evitar divergencias.
+
+**Estabilidade:** Sempre priorizar o estavel ao inves do bonito, mas sempre o funcinoal. Sempre mantenha bonito e seguindo o padrao do sistema se possivel.
+
+**Seguir usuario:** Se uma decisao do usuario nao for incoerente com que ja tem, deve perguntar para o usuario se realemnte quer fazer aquilo e falar os motivos de nao ser bom.
+
+**Linguagem:** Texto para humano em pt-BR; código e comentários em inglês. Se o projeto já usa outro idioma onde isso importa, siga o projeto.

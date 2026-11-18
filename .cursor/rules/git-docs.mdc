@@ -1,0 +1,34 @@
+---
+description: Git e documentação — formato de commit, um assunto por commit e README que reflete o código
+alwaysApply: true
+---
+
+# Git e documentação
+
+## Commits
+
+Formato: `tipo(escopo): assunto`
+
+- **tipos:** `feat`, `fix`, `docs`, `style`, `refactor`, `test`, `build`, `chore`.
+
+- **assunto em português**, imperativo, minúsculo, ≤ 200 caracteres total, sem ponto final. Descreva o **efeito**, não o arquivo.
+- **Um assunto por commit.** Renomear/mover arquivos nao se encaixa em commit sozinho. separe mudança de comportamento. Bump de dependência não se mistura com feature.
+- Antes de commitar: o projeto compila/testa com o comando dele.
+
+```
+feat(<escopo>): efeito curto e claro
+fix(<escopo>): o que deixou de quebrar
+doc: o que passou a estar documentado
+```
+
+## Documentação
+
+
+- **Texto para humano em pt-BR; código e comentários em inglês.** Se o projeto já usa outro idioma onde isso importa, siga o projeto.
+- Comandos **copiáveis e relativos à pasta do projeto** (`cd <projeto> && …`, nunca caminho absoluto com o nome do usuário). Um comando por bloco, com
+  comentário só quando não for óbvio.
+- Configuração e variáveis de ambiente em **tabela** (nome, padrão, para que serve). Segredo sempre como placeholder (`SUA_CHAVE=…`), nunca valor real.
+- **Documentação reflete o código:** rota, variável, comando ou pasta que mudou atualiza o README no mesmo commit. Tabela de API idem.
+- Não documente o que não existe mais: apague a seção obsoleta (o histórico é o git).
+- Sem marketing: diga o que faz, o que precisa e o que pode dar errado.
+- Bloco de código sempre com a linguagem marcada.

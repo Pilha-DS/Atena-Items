@@ -188,6 +188,11 @@ class Config(context: Context) : BaseConfig(context) {
         get() = prefs.getLong(AGENDA_SYNC_CURSOR, 0L)
         set(cursor) = prefs.edit().putLong(AGENDA_SYNC_CURSOR, cursor).apply()
 
+    /** Quick timers are a stream of their own: the events cursor means nothing here. */
+    var agendaTimerCursor: Long
+        get() = prefs.getLong(AGENDA_TIMER_CURSOR, 0L)
+        set(cursor) = prefs.edit().putLong(AGENDA_TIMER_CURSOR, cursor).apply()
+
     var agendaSyncLastAt: Long
         get() = prefs.getLong(AGENDA_SYNC_LAST_AT, 0L)
         set(syncedAt) = prefs.edit().putLong(AGENDA_SYNC_LAST_AT, syncedAt).apply()
@@ -237,6 +242,7 @@ class Config(context: Context) : BaseConfig(context) {
             .remove(AGENDA_SYNC_URL)
             .remove(AGENDA_SYNC_TOKEN)
             .remove(AGENDA_SYNC_CURSOR)
+            .remove(AGENDA_TIMER_CURSOR)
             .remove(AGENDA_SYNC_LAST_AT)
             .apply()
     }
